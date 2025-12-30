@@ -40,6 +40,7 @@ RUN apt install -y --no-install-recommends \
     geoip-database \
     gcc \
     git \
+    jq \
     libpq-dev \
     libpango-1.0-0 \
     libpangoft2-1.0-0 \

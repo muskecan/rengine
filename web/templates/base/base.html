@@ -18,9 +18,11 @@
     <link href="{% static 'plugins/switches/switches.min.css' %}" rel="stylesheet" type="text/css" />
     <link href="{% static 'custom/custom.css' %}" rel="stylesheet" type="text/css" />
     <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css">
     <link rel="stylesheet" type="text/css" href="{% static 'plugins/datatable/global.css' %}">
     <!-- <link rel="stylesheet" type="text/css" href="{% static 'plugins/datatable/custom.css' %}"> -->
     <link href="https://cdn.datatables.net/rowgroup/1.4.0/css/rowGroup.dataTables.min.css" rel="stylesheet" type="text/css" />
+    <link href="{% static 'custom/responsive.css' %}" rel="stylesheet" type="text/css" />
     <style media="screen">
       @font-face {
         font-family: "Cerebri Sans,sans-serif";
@@ -102,13 +104,27 @@
     <script src="{% static 'custom/custom.js' %}"></script>
     <script src="{% static 'custom/update.js' %}"></script>
     <script src="{% static 'custom/toolbox.js' %}"></script>
+    <script>
+      // Right sidebar toggle functions (inline to avoid caching issues)
+      function showRightSidebar() {
+        $('body').addClass('right-bar-enabled');
+        $('.right-bar').addClass('show');
+      }
+      function hideRightSidebar() {
+        $('body').removeClass('right-bar-enabled');
+        $('.right-bar').removeClass('show');
+      }
+    </script>
     <script src="{% static 'custom/right_sidebar.js' %}"></script>
     <script src="{% static 'custom/notification.js' %}"></script>
     <script src="{% static 'plugins/snackbar/snackbar.min.js' %}"></script>
     <script src="{% static 'plugins/sweetalert2/sweetalert2.all.min.js' %}"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"></script>
     <script src="https://cdn.datatables.net/rowgroup/1.4.0/js/dataTables.rowGroup.min.js"></script>
+    <script src="{% static 'custom/datatable-responsive.js' %}"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/timeago.js/4.0.2/timeago.min.js"></script>
     <script type="text/javascript">
       $(document).ready(function(){
@@ -125,18 +141,27 @@
         // rengine will also check everyday if update exists for rengine
         checkDailyUpdate();
 
-        getScanStatusSidebar(project='{{current_project.slug}}', reload=false);
+        getScanStatusSidebar('{{current_project.slug}}', false);
 
         // tippy for notification or scan acitivity
         tippy('.top-activity-counter', {
           content: 'Scan Activity',
         });
         if (localStorage.getItem('rengine-theme') == "dark") {
-          $('#dark-mode-check').prop("checked", true).change();
+          $('#dark-mode-check, #dark-mode-check-mobile').prop("checked", true).change();
         }
         else{
-          $('#dark-mode-check').prop("checked", false).change();
+          $('#dark-mode-check, #dark-mode-check-mobile').prop("checked", false).change();
         }
+        
+        // Sync mobile dark mode checkbox with desktop
+        $('#dark-mode-check').on('change', function() {
+          $('#dark-mode-check-mobile').prop('checked', $(this).is(':checked'));
+        });
+        $('#dark-mode-check-mobile').on('change', function() {
+          $('#dark-mode-check').prop('checked', $(this).is(':checked')).trigger('change');
+        });
+        
         handleHashInUrl();
       });
 

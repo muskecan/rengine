@@ -520,6 +520,14 @@ function get_screenshot(scan_id){
 	var interesting_badge = `<span class="m-1 float-end badge  badge-soft-danger">Interesting</span>`;
 	$.getJSON(`/api/listSubdomains/?scan_id=${scan_id}&no_page&only_screenshot`, function(data) {
 		$("#screenshot-loader").remove();
+		
+		// Check if there are any screenshots
+		if (!data || data.length === 0) {
+			$("#filter-screenshot").hide();
+			gridzyElement.innerHTML = '<div class="text-center text-muted p-5"><i class="fe-camera-off" style="font-size: 48px;"></i><p class="mt-3">No screenshots available for this scan.</p><p class="small">Screenshots are captured during the scan if the screenshot task is enabled in your scan engine configuration.</p></div>';
+			return;
+		}
+		
 		$("#filter-screenshot").show();
 		for (var subdomain in data) {
 			var figure = document.createElement('figure');

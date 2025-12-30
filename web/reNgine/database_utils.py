@@ -32,9 +32,8 @@ def bulk_import_targets(
 			h1_team_handle (str): hackerone team handle (if imported from hackerone)
 
 		Returns:
-			bool: True if new targets are imported, False otherwise
+			list: List of Domain objects that were created or found (empty list if none)
 	"""
-	new_targets_imported = False
 	project = Project.objects.get(slug=project_slug)
 
 	all_targets = []
@@ -54,45 +53,44 @@ def bulk_import_targets(
 		logger.info(f'{name} | Domain? {is_domain} | IP? {is_ip} | URL? {is_url}')
 
 		if is_domain:
-			target_obj = store_domain(name, project, description, h1_team_handle)
+			target_obj, _ = store_domain(name, project, description, h1_team_handle)
 		elif is_url:
-			target_obj = store_url(name, project, description, h1_team_handle)
+			target_obj, _ = store_url(name, project, description, h1_team_handle)
 		elif is_ip:
-			target_obj = store_ip(name, project, description, h1_team_handle)
+			target_obj, _ = store_ip(name, project, description, h1_team_handle)
 		else:
 			logger.warning(f'{name} is not supported by reNgine')
 			continue
 
 		if target_obj:
 			all_targets.append(target_obj)
-			new_targets_imported = True
 
-		if organization_name and all_targets:
-			org_name = organization_name.strip()
-			org, created = Organization.objects.get_or_create(
-				name=org_name,
-				defaults={
-					'project': project,
-					'description': org_description or '',
-					'insert_date': timezone.now()
-				}
-			)
+	if organization_name and all_targets:
+		org_name = organization_name.strip()
+		org, created = Organization.objects.get_or_create(
+			name=org_name,
+			defaults={
+				'project': project,
+				'description': org_description or '',
+				'insert_date': timezone.now()
+			}
+		)
 
-			if not created:
-				org.project = project
-				if org_description:
-					org.description = org_description
-				if org.insert_date is None:
-					org.insert_date = timezone.now()
-				org.save()
+		if not created:
+			org.project = project
+			if org_description:
+				org.description = org_description
+			if org.insert_date is None:
+				org.insert_date = timezone.now()
+			org.save()
 
-			# Associate all targets with the organization
-			for target in all_targets:
-				org.domains.add(target)
+		# Associate all targets with the organization
+		for target in all_targets:
+			org.domains.add(target)
 
-			logger.info(f"{'Created' if created else 'Updated'} organization {org_name} with {len(all_targets)} targets")
+		logger.info(f"{'Created' if created else 'Updated'} organization {org_name} with {len(all_targets)} targets")
 
-	return new_targets_imported
+	return all_targets
 
 
 
@@ -106,12 +104,16 @@ def remove_wildcard(input_string):
 def store_domain(domain_name, project, description, h1_team_handle):
 	"""
 		This function is used to store domain in reNgine
+		
+		Returns:
+			tuple: (domain, created) where domain is the Domain object and 
+			       created is True if new, False if existing
 	"""
 	existing_domain = Domain.objects.filter(name=domain_name).first()
 
 	if existing_domain:
 		logger.info(f'Domain {domain_name} already exists. skipping.')
-		return
+		return existing_domain, False
 	
 	current_time = timezone.now()
 
@@ -125,14 +127,22 @@ def store_domain(domain_name, project, description, h1_team_handle):
 
 	logger.info(f'Added new domain {new_domain.name}')
 
-	return new_domain
+	return new_domain, True
 
 def store_url(url, project, description, h1_team_handle):
+	"""
+		This function is used to store URL and its domain in reNgine
+		
+		Returns:
+			tuple: (domain, created) where domain is the Domain object and 
+			       created is True if new, False if existing
+	"""
 	parsed_url = urlparse(url)
 	http_url = parsed_url.geturl()
 	domain_name = parsed_url.netloc
 
 	domain = Domain.objects.filter(name=domain_name).first()
+	created = False
 
 	if domain:
 		logger.info(f'Domain {domain_name} already exists. skipping...')
@@ -145,6 +155,7 @@ def store_url(url, project, description, h1_team_handle):
 			project=project,
 			insert_date=timezone.now()
 		)
+		created = True
 		logger.info(f'Added new domain {domain.name}')
 
 	EndPoint.objects.get_or_create(
@@ -152,11 +163,18 @@ def store_url(url, project, description, h1_team_handle):
 		http_url=sanitize_url(http_url)
 	)
 
-	return domain
+	return domain, created
 
 def store_ip(ip_address, project, description, h1_team_handle):
-
+	"""
+		This function is used to store IP address in reNgine
+		
+		Returns:
+			tuple: (domain, created) where domain is the Domain object and 
+			       created is True if new, False if existing
+	"""
 	domain = Domain.objects.filter(name=ip_address).first()
+	domain_created = False
 	
 	if domain:
 		logger.info(f'Domain {ip_address} already exists. skipping...')
@@ -169,14 +187,14 @@ def store_ip(ip_address, project, description, h1_team_handle):
 			insert_date=timezone.now(),
 			ip_address_cidr=ip_address
 		)
+		domain_created = True
 		logger.info(f'Added new domain {domain.name}')
 	
 	ip_data = get_ip_info(ip_address)
-	ip_data = get_ip_info(ip_address)
-	ip, created = IpAddress.objects.get_or_create(address=ip_address)
+	ip, _ = IpAddress.objects.get_or_create(address=ip_address)
 	ip.reverse_pointer = ip_data.reverse_pointer
 	ip.is_private = ip_data.is_private
 	ip.version = ip_data.version
 	ip.save()
 
-	return domain
+	return domain, domain_created

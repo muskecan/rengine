@@ -1203,7 +1203,7 @@ def screenshot(self, ctx={}, description=None):
 
 	# Config
 	screenshots_path = f'{self.results_dir}/screenshots'
-	output_path = f'{self.results_dir}/screenshots/{self.filename}'
+	output_path = f'{screenshots_path}/open_ports.csv'  # EyeWitness outputs to open_ports.csv
 	alive_endpoints_file = f'{self.results_dir}/endpoints_alive.txt'
 	config = self.yaml_configuration.get(SCREENSHOT) or {}
 	enable_http_crawl = config.get(ENABLE_HTTP_CRAWL, DEFAULT_ENABLE_HTTP_CRAWL)
@@ -1223,6 +1223,20 @@ def screenshot(self, ctx={}, description=None):
 		ctx=ctx
 	)
 
+	# Check if we have any URLs to screenshot
+	if not os.path.isfile(alive_endpoints_file):
+		logger.warning(f'No endpoints file found at {alive_endpoints_file} for {self.domain.name}. Skipping screenshots.')
+		return
+	
+	with open(alive_endpoints_file, 'r') as f:
+		endpoints_count = sum(1 for line in f if line.strip())
+	
+	if endpoints_count == 0:
+		logger.warning(f'No alive endpoints found for {self.domain.name}. Skipping screenshots.')
+		return
+	
+	logger.info(f'Taking screenshots of {endpoints_count} endpoints for {self.domain.name}')
+
 	# Send start notif
 	notification = Notification.objects.first()
 	send_output_file = notification.send_scan_output_file if notification else False
@@ -1238,7 +1252,7 @@ def screenshot(self, ctx={}, description=None):
 		scan_id=self.scan_id,
 		activity_id=self.activity_id)
 	if not os.path.isfile(output_path):
-		logger.error(f'Could not load EyeWitness results at {output_path} for {self.domain.name}.')
+		logger.error(f'EyeWitness did not generate output file at {output_path} for {self.domain.name}. Check if EyeWitness is installed correctly.')
 		return
 
 	# Loop through results and save objects in DB

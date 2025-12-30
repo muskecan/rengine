@@ -1,8 +1,13 @@
-<div class="right-bar">
+<div class="right-bar" id="right-sidebar">
   <div data-simplebar class="h-100">
+    <!-- Close Button Header -->
+    <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+      <h5 class="mb-0">Scan Activity</h5>
+      <button type="button" class="btn-close btn-close-white" aria-label="Close" onclick="hideRightSidebar();"></button>
+    </div>
     <div class="tab-content pt-0">
       <div class="tab-pane active" id="tasks-tab" role="tabpanel">
-        <ul class="nav nav-tabs nav-bordered mt-3">
+        <ul class="nav nav-tabs nav-bordered mt-3 mt-lg-3">
           <li class="nav-item active">
             <a href="#tasks" data-bs-toggle="tab" aria-expanded="true" class="nav-link active">
               Scan History
@@ -55,7 +60,7 @@
             </div>
           </div>
           <div class="text-center mt-3 mb-4">
-            <a href="javascript:getScanStatusSidebar(project='{{current_project.slug}}', reload=true)" class="btn btn-md btn-primary">
+            <a href="#" onclick="getScanStatusSidebar('{{current_project.slug}}', true); return false;" class="btn btn-md btn-primary">
               Reload
             </a>
           </div>

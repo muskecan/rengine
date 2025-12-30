@@ -28,8 +28,10 @@ Organizations
           </div>
           <div class="col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
             {% if user|can:'modify_targets' %}
-            <a class="btn btn-soft-danger float-end disabled ms-1" href="#" onclick="deleteMultipleOrganizations()" id="delete_multiple_button">Delete Multiple Organizations</a>
-            <a class="btn btn-soft-primary float-end ms-1" href="{% url 'add_organization' current_project.slug %}" data-toggle="tooltip" data-placement="top" title="Add Organization">Add New Organization</a>
+            <div class="d-flex flex-wrap justify-content-start justify-content-md-end gap-1">
+              <a class="btn btn-soft-primary btn-sm" href="{% url 'add_organization' current_project.slug %}" data-toggle="tooltip" data-placement="top" title="Add Organization"><i class="fe-plus d-md-none"></i> <span>Add Organization</span></a>
+              <a class="btn btn-soft-danger btn-sm disabled" href="#" onclick="deleteMultipleOrganizations()" id="delete_multiple_button"><i class="fe-trash-2 d-md-none"></i> <span class="d-none d-lg-inline">Delete Multiple</span><span class="d-lg-none">Delete</span></a>
+            </div>
             {% endif %}
           </div>
         </div>

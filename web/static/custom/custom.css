@@ -152,6 +152,24 @@ div.dataTables_wrapper div.dataTables_filter input:focus {
   right: -470px;
 }
 
+/* Hide visible scrollbar in Scan Activity sidebar (keep scrolling enabled) */
+#right-sidebar,
+#right-sidebar [data-simplebar] {
+  -ms-overflow-style: none; /* IE/Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+#right-sidebar::-webkit-scrollbar,
+#right-sidebar [data-simplebar]::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* If SimpleBar elements are present, hide their track too (right sidebar only) */
+#right-sidebar .simplebar-track {
+  display: none !important;
+}
+
 /* theme toggle theme-switch */
 .toggle-theme-switch {
   vertical-align: middle;

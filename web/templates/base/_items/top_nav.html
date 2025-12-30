@@ -5,6 +5,71 @@
     <nav class="navbar navbar-light navbar-expand-lg topnav-menu">
       <div class="collapse navbar-collapse" id="topnav-menu-content">
         <ul class="navbar-nav">
+          <!-- Mobile-only: Dark Mode Toggle -->
+          <li class="nav-item d-lg-none">
+            <a class="nav-link arrow-none d-flex align-items-center" href="javascript:void(0);" onclick="changeTheme()">
+              <i class="fe-sun me-1"></i>
+              <span class="me-2">Dark Mode</span>
+              <label class="switch s-outline s-outline-primary mb-0">
+                <input type="checkbox" class="theme-shifter" id="dark-mode-check-mobile">
+                <span class="slider round toggle-theme-switch"></span>
+              </label>
+            </a>
+          </li>
+          <!-- Mobile-only: Projects Switcher -->
+          <li class="nav-item dropdown d-lg-none">
+            <a class="nav-link dropdown-toggle arrow-none" href="#" id="topnav-projects-mobile" role="button"
+              data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+              <i class="fe-layers me-1"></i> Switch Project
+              <div class="arrow-down"></div>
+            </a>
+            <div class="dropdown-menu" aria-labelledby="topnav-projects-mobile">
+              {% for project in projects %}
+                <a href="/{{project.slug}}/dashboard" class="dropdown-item {% if project == current_project %} active {% endif %}">
+                  <span>{{project.name}}</span>
+                </a>
+              {% endfor %}
+              <div class="dropdown-divider"></div>
+              {% if request.user|can:'modify_targets' %}
+              <a href="#" onclick="add_project_modal()" class="dropdown-item"><i class="mdi mdi-plus me-1"></i> Create New Project</a>
+              {% endif %}
+            </div>
+          </li>
+          {% if user|can:'modify_targets' or user|can:'modify_scan_configurations' or user|can:'modify_system_configurations' or user|can:'modify_wordlists' %}
+          <!-- Mobile-only: Quick Add -->
+          <li class="nav-item dropdown d-lg-none">
+            <a class="nav-link dropdown-toggle arrow-none" href="#" id="topnav-quickadd-mobile" role="button"
+              data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+              <i class="fe-plus me-1"></i> Quick Add
+              <div class="arrow-down"></div>
+            </a>
+            <div class="dropdown-menu" aria-labelledby="topnav-quickadd-mobile">
+              {% if user|can:'modify_targets' %}
+              <a href="#" onclick="show_quick_add_target_modal()" class="dropdown-item">
+                <i class="fe-crosshair me-1"></i> Target
+              </a>
+              <a href="{% url 'add_organization' current_project.slug %}" class="dropdown-item">
+                <i class="fe-briefcase me-1"></i> Organization
+              </a>
+              {% endif %}
+              {% if user|can:'modify_scan_configurations' %}
+              <a href="{% url 'add_engine' current_project.slug %}" class="dropdown-item">
+                <i class="fe-cpu me-1"></i> Scan Engine
+              </a>
+              {% endif %}
+              {% if user|can:'modify_system_configurations' %}
+              <a href="{% url 'add_tool' current_project.slug %}" class="dropdown-item">
+                <i class="mdi mdi-hammer-wrench me-1"></i> External Tool
+              </a>
+              {% endif %}
+              {% if user|can:'modify_wordlists' %}
+              <a href="{% url 'add_wordlist' current_project.slug %}" class="dropdown-item">
+                <i class="fe-list me-1"></i> Wordlist
+              </a>
+              {% endif %}
+            </div>
+          </li>
+          {% endif %}
           <li class="nav-item dropdown {{target_data_active}}">
             <a class="nav-link arrow-none" href="{% url 'dashboardIndex' current_project.slug %}">
               <i class="fe-home me-1"></i> Dashboard
@@ -123,7 +188,7 @@
           </li>
         </ul>
       </div>
-      <span class="badge bg-blue" data-bs-toggle="tooltip" data-bs-placement="top" title="Current Project">{{current_project.name}}</span>
+      <span class="badge bg-blue d-none d-lg-inline-block" data-bs-toggle="tooltip" data-bs-placement="top" title="Current Project">{{current_project.name}}</span>
     </nav>
   </div>
 </div>

@@ -59,9 +59,11 @@ Quick Scan History
             </div>
           </div>
           {% if user|can:'initiate_scans_subscans' %}
-          <div class="col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
-            <a class="btn btn-soft-danger float-end disabled ms-1 mt-1" href="#" onclick="deleteMultipleScan()" id="delete_multiple_button">Delete Multiple Scans</a>
-            <a class="btn btn-soft-danger float-end disabled ms-1 mt-1" href="#" onclick="stopMultipleScan()" id="stop_multiple_button">Stop Multiple Scans</a>
+          <div class="col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12 mt-2 mt-md-0">
+            <div class="d-flex flex-wrap justify-content-start justify-content-md-end gap-1">
+              <a class="btn btn-soft-danger btn-sm disabled" href="#" onclick="deleteMultipleScan()" id="delete_multiple_button"><i class="fe-trash-2 d-md-none"></i> <span class="d-none d-md-inline">Delete Multiple</span><span class="d-md-none">Delete</span></a>
+              <a class="btn btn-soft-danger btn-sm disabled" href="#" onclick="stopMultipleScan()" id="stop_multiple_button"><i class="fe-stop-circle d-md-none"></i> <span class="d-none d-md-inline">Stop Multiple</span><span class="d-md-none">Stop</span></a>
+            </div>
           </div>
           {% endif %}
         </div>

@@ -942,7 +942,7 @@ class AddTarget(APIView):
 		if not validators.domain(domain_name):
 			return Response({'status': False, 'message': 'Invalid domain or IP'})
 
-		status = bulk_import_targets(
+		imported_targets = bulk_import_targets(
 			targets=[{
 				'name': domain_name,
 				'description': description,
@@ -952,12 +952,13 @@ class AddTarget(APIView):
 			project_slug=slug
 		)
 
-		if status:
+		if imported_targets:
+			domain = imported_targets[0]
 			return Response({
 				'status': True,
 				'message': 'Domain successfully added as target !',
 				'domain_name': domain_name,
-				# 'domain_id': domain.id
+				'domain_id': domain.id
 			})
 		return Response({
 			'status': False,
@@ -1242,44 +1243,61 @@ class RengineUpdateCheck(APIView):
 
 		return_response = {}
 
-		# get current version_number
-		# remove quotes from current_version
+		# Get current version (already stripped of 'v' prefix in settings.py)
 		current_version = RENGINE_CURRENT_VERSION
 
-		# for consistency remove v from both if exists
-		latest_version = re.search(r'v(\d+\.)?(\d+\.)?(\*|\d+)',
-								   ((response[0]['name'
-								   ])[1:] if response[0]['name'][0] == 'v'
-									else response[0]['name']))
-
-		latest_version = latest_version.group(0) if latest_version else None
+		# Extract version from release name
+		release_name = response[0].get('name', '') or response[0].get('tag_name', '')
+		
+		# Strip 'v' prefix if present for consistency
+		if release_name.startswith('v'):
+			release_name = release_name[1:]
+		
+		# Extract version number (e.g., "2.2.0" from "2.2.0" or "2.2.0-beta")
+		match = re.search(r'(\d+\.\d+\.\d+)', release_name)
+		if match:
+			latest_version = match.group(1)
+		else:
+			# Fallback: try simpler version format like X.X or just X
+			match = re.search(r'(\d+(?:\.\d+)*)', release_name)
+			latest_version = match.group(1) if match else None
 
 		if not latest_version:
-			latest_version = re.search(r'(\d+\.)?(\d+\.)?(\*|\d+)',
-										((response[0]['name'
-										])[1:] if response[0]['name'][0]
-										== 'v' else response[0]['name']))
-			if latest_version:
-				latest_version = latest_version.group(0)
+			return Response({'status': False, 'message': 'Could not parse version from GitHub'})
 
 		return_response['status'] = True
 		return_response['latest_version'] = latest_version
 		return_response['current_version'] = current_version
-		is_version_update_available = version.parse(current_version) < version.parse(latest_version)
-
-		# if is_version_update_available then we should create inapp notification
-		create_inappnotification(
-			title='reNgine Update Available',
-			description=f'Update to version {latest_version} is available',
-			notification_type=SYSTEM_LEVEL_NOTIFICATION,
-			project_slug=None,
-			icon='mdi-update',
-			redirect_link='https://github.com/yogeshojha/rengine/releases',
-			open_in_new_tab=True
-		)
+		
+		# Compare versions - only update available if latest is strictly greater
+		try:
+			is_version_update_available = version.parse(latest_version) > version.parse(current_version)
+		except Exception:
+			# If version parsing fails, fall back to string comparison
+			is_version_update_available = latest_version != current_version
 
 		return_response['update_available'] = is_version_update_available
+		
+		# Only create notification if an update is actually available
+		# and no existing unread notification for this version exists
 		if is_version_update_available:
+			# Check if notification for this version already exists
+			existing_notification = InAppNotification.objects.filter(
+				title='reNgine Update Available',
+				description__contains=latest_version,
+				is_read=False
+			).exists()
+			
+			if not existing_notification:
+				create_inappnotification(
+					title='reNgine Update Available',
+					description=f'Update to version {latest_version} is available',
+					notification_type=SYSTEM_LEVEL_NOTIFICATION,
+					project_slug=None,
+					icon='mdi-update',
+					redirect_link='https://github.com/yogeshojha/rengine/releases',
+					open_in_new_tab=True
+				)
 			return_response['changelog'] = response[0]['body']
 
 		return Response(return_response)
@@ -2072,7 +2090,8 @@ class SubdomainsViewSet(viewsets.ModelViewSet):
 				return (
 					Subdomain.objects
 					.filter(scan_history__id=scan_id)
-					.exclude(screenshot_path__isnull=True))
+					.exclude(screenshot_path__isnull=True)
+					.exclude(screenshot_path=''))
 			return Subdomain.objects.filter(scan_history=scan_id)
 
 	def paginate_queryset(self, queryset, view=None):

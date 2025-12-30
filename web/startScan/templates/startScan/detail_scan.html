@@ -36,7 +36,8 @@ Scan Findings
 <div class="row">
 	<div class="col-12">
 		<div class="card">
-			<ul class="nav nav-tabs nav-bordered m-1">
+			<div class="overflow-x-auto">
+			<ul class="nav nav-tabs nav-bordered m-1 flex-nowrap">
 				<li class="nav-item">
 					<a class="nav-link active" id="pills-summary-tab" data-bs-toggle="tab" aria-expanded="false" class="nav-link" href="#summary-tab">Home</a>
 				</li>
@@ -91,6 +92,7 @@ Scan Findings
 					<a class="nav-link" id="pills-visualisation-tab" data-bs-toggle="tab" aria-expanded="false" class="nav-link" href="#visualisation-tab">Visualization</a>
 				</li>
 			</ul>
+			</div>
 		</div>
 	</div>
 </div>
@@ -98,7 +100,7 @@ Scan Findings
 	<!-- start tab contents  -->
 	<div class="tab-pane show active" id="summary-tab">
 		<div class="row">
-			<div class="col-xl-3 col-lg-4">
+			<div class="col-12 col-lg-4 col-xl-3">
 				<div class="card">
 					<div class="card-body">
 						<div class="d-flex align-items-start mb-3">
@@ -342,9 +344,9 @@ Scan Findings
 					</div>
 				</div>
 			</div>
-			<div class="col-xl-9 col-lg-8">
+			<div class="col-12 col-lg-8 col-xl-9">
 				<div class="row">
-					<div class="col-xl-3 col-lg-3 col-6">
+					<div class="col-6 col-lg-3 col-xl-3">
 						<div class="card" id="tooltip-container">
 							<div class="card-body">
 								<i class="fa fa-info-circle text-muted float-end" data-bs-container="#tooltip-container" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Total Subdomains Discovered by reNgine during this scan"></i>
@@ -497,9 +499,10 @@ Scan Findings
 											</div>
 											<div class="tab-pane fade active show" id="v-pills-domain" role="tabpanel" aria-labelledby="v-pills-domain-tab" data-simplebar style="min-height: 300px;">
 												{% if not history.domain.domain_info %}
-												<div class="alert alert-danger alert-dismissible fade show" role="alert" id="whois_not_fetched_alert">
+												<div class="alert alert-info alert-dismissible fade show" role="alert" id="whois_not_fetched_alert">
 													<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-													WHOIS Record Has not been fetched, would you like to <a href="javascript: fetch_whois('{{history.domain}}', true);">fetch it now?</a>
+													<span class="spinner-border spinner-border-sm me-2" role="status"></span>
+													WHOIS Record is being fetched automatically...
 												</div>
 												{% endif %}
 												<div class="alert alert-info alert-dismissible fade show" role="alert" id="whois_fetching_alert" style="display: none">
@@ -1422,6 +1425,11 @@ $(document).ready(function() {
 	$(".tagging").select2({
 			tags: true
 	});
+
+	// Auto-fetch WHOIS if not already fetched
+	{% if not history.domain.domain_info %}
+	fetch_whois('{{history.domain}}', true);
+	{% endif %}
 
 	//populate charts
 	// http_status breakdown chart

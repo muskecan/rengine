@@ -1,3 +1,13 @@
+function showRightSidebar() {
+  $('body').addClass('right-bar-enabled');
+  $('.right-bar').addClass('show');
+}
+
+function hideRightSidebar() {
+  $('body').removeClass('right-bar-enabled');
+  $('.right-bar').removeClass('show');
+}
+
 function getScanStatusSidebar(project, reload) {
   $.getJSON('/api/scan_status/?project=' + project, function(data) {
     // main scans

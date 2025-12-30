@@ -40,16 +40,18 @@ Targets
 							<a href="#" class="dropdown-ite text-primary float-end" id="resetFilters">Reset Filters</a>
 						</div>
 					</div>
-					<div class="col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
-						{% if user|can:'modify_targets' %}
-						<a class="btn btn-soft-danger float-end disabled ms-1 mt-1" href="#" onclick="deleteMultipleTargets(slug='{{slug}}')" id="delete_multiple_button">Delete Multiple Targets</a>
-						{% endif %}
-						{% if user|can:'initiate_scans_subscans' %}
-						<a class="btn btn-soft-info float-end disabled ms-1 mt-1" href="#" onclick="scanMultipleTargets(slug='{{slug}}')" id="scan_multiple_button">Scan Multiple Targets</a>
-						{% endif %}
-						{% if user|can:'modify_targets' %}
-						<a class="btn btn-soft-primary float-end ms-1 mt-1" href="{% url 'add_target' slug %}" data-toggle="tooltip" data-placement="top" title="Add New Targets">Add Targets</a>
-						{% endif %}
+					<div class="col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12 mt-2 mt-md-0">
+						<div class="d-flex flex-wrap justify-content-start justify-content-md-end gap-1">
+							{% if user|can:'modify_targets' %}
+							<a class="btn btn-soft-primary btn-sm mt-1" href="{% url 'add_target' slug %}" data-toggle="tooltip" data-placement="top" title="Add New Targets"><i class="fe-plus d-md-none"></i> <span>Add Targets</span></a>
+							{% endif %}
+							{% if user|can:'initiate_scans_subscans' %}
+							<a class="btn btn-soft-info btn-sm disabled mt-1" href="#" onclick="scanMultipleTargets(slug='{{slug}}')" id="scan_multiple_button"><i class="fe-zap d-md-none"></i> <span class="d-none d-lg-inline">Scan Multiple</span><span class="d-lg-none">Scan</span></a>
+							{% endif %}
+							{% if user|can:'modify_targets' %}
+							<a class="btn btn-soft-danger btn-sm disabled mt-1" href="#" onclick="deleteMultipleTargets(slug='{{slug}}')" id="delete_multiple_button"><i class="fe-trash-2 d-md-none"></i> <span class="d-none d-lg-inline">Delete Multiple</span><span class="d-lg-none">Delete</span></a>
+							{% endif %}
+						</div>
 					</div>
 				</div>
 			</div>

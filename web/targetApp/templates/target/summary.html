@@ -264,9 +264,10 @@ Target Summary
 										<div class="tab-content pt-0">
 											<div class="tab-pane fade active show" id="v-pills-domain" role="tabpanel" aria-labelledby="v-pills-domain-tab" data-simplebar style="min-height: 300px;">
 												{% if not target.domain_info %}
-												<div class="alert alert-danger alert-dismissible fade show" role="alert" id="whois_not_fetched_alert">
+												<div class="alert alert-info alert-dismissible fade show" role="alert" id="whois_not_fetched_alert">
 													<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-													WHOIS Record Has not been fetched, would you like to <a href="javascript: fetch_whois('{{target}}', true);">fetch it now?</a>
+													<span class="spinner-border spinner-border-sm me-2" role="status"></span>
+													WHOIS Record is being fetched automatically...
 												</div>
 												{% endif %}
 												<div class="alert alert-info alert-dismissible fade show" role="alert" id="whois_fetching_alert" style="display: none">
@@ -753,6 +754,11 @@ $(document).ready(function(){
 	const ps1 = new PerfectScrollbar(document.querySelector('.endpoint-search'));
 	const ps2 = new PerfectScrollbar(document.querySelector('.vulnerability-search'));
 	$('[data-toggle="tooltip"]').tooltip();
+
+	// Auto-fetch WHOIS if not already fetched
+	{% if not target.domain_info %}
+	fetch_whois('{{target}}', true);
+	{% endif %}
 	// HTTP STATUS Breakdown chart
 	// depending on http_status_breakdown, generate color
 	var colors = [
