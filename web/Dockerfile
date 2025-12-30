@@ -83,7 +83,7 @@ RUN printf "\
     github.com/tomnomnom/gf@latest\n\
     github.com/tomnomnom/unfurl@latest\n\
     github.com/tomnomnom/waybackurls@latest\n\
-    github.com/projectdiscovery/httpx/cmd/httpx@latest\n\
+    github.com/projectdiscovery/httpx/cmd/httpx@v1.2.5\n\
     github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest\n\
     github.com/projectdiscovery/chaos-client/cmd/chaos@latest\n\
     github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest\n\
