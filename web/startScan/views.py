@@ -1127,7 +1127,7 @@ def create_report(request, id):
     data['secondary_color'] = secondary_color
 
     data['subdomain_http_status_chart'] = generate_subdomain_chart_by_http_status(subdomains)
-    data['vulns_severity_chart'] = generate_vulnerability_chart_by_severity(vulns) if vulns else ''
+    data['vulns_severity_chart'] = generate_vulnerability_chart_by_severity(vulns) if vulns.count() > 0 else ''
 
     if report_template == 'modern':
         template = get_template('report/modern.html')
@@ -1136,7 +1136,6 @@ def create_report(request, id):
 
     html = template.render(data)
     pdf = HTML(string=html).write_pdf()
-    # pdf = HTML(string=html).write_pdf(stylesheets=[CSS(string='@page { size: A4; margin: 0; }')])
 
     if 'download' in request.GET:
         response = HttpResponse(pdf, content_type='application/octet-stream')

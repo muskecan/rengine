@@ -4,7 +4,7 @@ import colorsys
 import plotly.graph_objs as go
 from plotly.io import to_image
 from django.db.models import Count
-from reNgine.definitions import NUCLEI_SEVERITY_MAP
+from reNgine.definitions import NUCLEI_SEVERITY_MAP, NUCLEI_REVERSE_SEVERITY_MAP
 
 from startScan.models import *
 
@@ -21,7 +21,7 @@ def generate_subdomain_chart_by_http_status(subdomains):
     Args:
         subdomains: QuerySet of subdomains.
     Returns:
-        Image as base64 encoded string.
+        Image as base64 encoded string, or empty string if no data.
     """
     http_statuses = (
         subdomains
@@ -32,7 +32,13 @@ def generate_subdomain_chart_by_http_status(subdomains):
     )
     http_status_count = [{'http_status': entry['http_status'], 'count': entry['count']} for entry in http_statuses]
 
+    # Return empty string if no data to chart
+    if not http_status_count:
+        return ''
+
     total = sum(entry['count'] for entry in http_status_count)
+    if total == 0:
+        return ''
     
     labels = [str(entry['http_status']) for entry in http_status_count]
     sizes = [entry['count'] for entry in http_status_count]
@@ -95,18 +101,24 @@ def generate_vulnerability_chart_by_severity(vulnerabilities):
     Args:
         vulnerabilities: QuerySet of Vulnerability objects.
     Returns:
-        Image as base64 encoded string.
+        Image as base64 encoded string, or empty string if no data.
     """
-    severity_counts = (
+    severity_counts = list(
         vulnerabilities
         .values('severity')
         .annotate(count=Count('severity'))
         .order_by('-severity')
     )
     
-    total = sum(entry['count'] for entry in severity_counts)
+    # Return empty string if no data to chart
+    if not severity_counts:
+        return ''
     
-    labels = [NUCLEI_REVERSE_SEVERITY_MAP[entry['severity']].capitalize() for entry in severity_counts]
+    total = sum(entry['count'] for entry in severity_counts)
+    if total == 0:
+        return ''
+    
+    labels = [NUCLEI_REVERSE_SEVERITY_MAP.get(entry['severity'], 'unknown').capitalize() for entry in severity_counts]
     values = [entry['count'] for entry in severity_counts]
     colors = [get_color_by_severity(entry['severity']) for entry in severity_counts]
     

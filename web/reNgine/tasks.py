@@ -1708,7 +1708,10 @@ def waf_detection(self, ctx={}, description=None):
 			name=waf_name,
 			manufacturer=waf_manufacturer.replace('.', '') if waf_manufacturer else ''
 		)
-		wafs_detected.append(waf)
+		wafs_detected.append({
+			'name': waf.name,
+			'manufacturer': waf.manufacturer
+		})
 
 		# Add waf info to Subdomain in DB
 		subdomain = get_subdomain_from_url(http_url)
@@ -1716,6 +1719,8 @@ def waf_detection(self, ctx={}, description=None):
 		subdomain_query, _ = Subdomain.objects.get_or_create(scan_history=self.scan, name=subdomain)
 		subdomain_query.waf.add(waf)
 		subdomain_query.save()
+	
+	# Return JSON-serializable data (not Django model objects) for Celery chord compatibility
 	return wafs_detected
 
 
