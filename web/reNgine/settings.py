@@ -39,6 +39,9 @@ DEFAULT_RETRIES = env.int('DEFAULT_RETRIES', default=1)
 DEFAULT_THREADS = env.int('DEFAULT_THREADS', default=30)
 DEFAULT_GET_GPT_REPORT = env.bool('DEFAULT_GET_GPT_REPORT', default=True)
 
+# GooFuzz Google Custom Search API keys (format: CX_ID1,API_KEY1;CX_ID2,API_KEY2)
+GOOFUZZ_GCS_KEYS = env('GOOFUZZ_GCS_KEYS', default='')
+
 # Globals
 ALLOWED_HOSTS = ['*']
 SECRET_KEY = first_run(SECRET_FILE, BASE_DIR)

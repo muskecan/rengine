@@ -3,6 +3,7 @@ import json
 import os
 import pprint
 import subprocess
+import tempfile
 import time
 import validators
 import xmltodict
@@ -1292,6 +1293,8 @@ def screenshot(self, ctx={}, description=None):
 		return
 
 	# Parse gowitness JSONL output and save to database
+	# gowitness 3.x JSONL fields: url, file_name (screenshot filename), response_code, title, final_url, etc.
+	# Note: 'screenshot' field is empty in gowitness 3.x, actual filename is in 'file_name'
 	screenshot_paths = []
 	with open(output_json, 'r') as f:
 		for line in f:
@@ -1299,13 +1302,26 @@ def screenshot(self, ctx={}, description=None):
 				continue
 			try:
 				result = json.loads(line)
-				url = result.get('url', '')
-				screenshot_file = result.get('screenshot_path', '') or result.get('filename', '')
+				url = result.get('final_url', '') or result.get('url', '')
+				# gowitness 3.x: 'file_name' contains screenshot filename, 'screenshot' is empty
+				screenshot_filename = result.get('file_name', '') or result.get('screenshot', '') or result.get('filename', '')
 				response_code = result.get('response_code', 0)
 				page_title = result.get('title', '')
+				is_failed = result.get('failed', False)
+				
+				logger.info(f'gowitness result: url={url}, file_name={screenshot_filename}, status={response_code}, failed={is_failed}')
 				
 				# Skip failed screenshots
-				if not screenshot_file or response_code == 0:
+				if is_failed or not screenshot_filename or response_code == 0:
+					logger.warning(f'Skipping screenshot - failed={is_failed}, file_name={screenshot_filename}, response_code={response_code}')
+					continue
+				
+				# Build full path - file_name is just the filename, not full path
+				screenshot_file = f'{screenshots_path}/{screenshot_filename}'
+				
+				# Verify screenshot file exists
+				if not os.path.isfile(screenshot_file):
+					logger.warning(f'Screenshot file not found: {screenshot_file}')
 					continue
 				
 				# Extract subdomain from URL
@@ -1329,12 +1345,14 @@ def screenshot(self, ctx={}, description=None):
 					if page_title and not subdomain.page_title:
 						subdomain.page_title = page_title[:500]  # Limit title length
 					subdomain.save()
-					logger.info(f'Added screenshot for {subdomain.name}: {relative_screenshot_path}')
+					logger.info(f'Saved screenshot for {subdomain.name}: {relative_screenshot_path}')
+				else:
+					logger.warning(f'No subdomain found in database for {subdomain_name}')
 			except json.JSONDecodeError as e:
 				logger.warning(f'Failed to parse gowitness JSON line: {e}')
 				continue
 			except Exception as e:
-				logger.warning(f'Error processing screenshot result: {e}')
+				logger.exception(f'Error processing screenshot result: {e}')
 				continue
 
 	# Cleanup: remove JSONL and any db files
@@ -1424,7 +1442,8 @@ def port_scan(self, hosts=[], ctx={}, description=None):
 	cmd += f' -timeout {timeout}s' if timeout > 0 else ''
 	cmd += f' -passive' if passive else ''
 	cmd += f' -exclude-ports {exclude_ports_str}' if exclude_ports else ''
-	cmd += f' -sD' if not nmap_enabled else ''  # Service detection when nmap disabled
+	# Note: -sD (service discovery) flag removed - no longer supported in naabu
+	# Enable nmap in scan engine config for service detection
 	cmd += f' -silent'
 
 	# Execute cmd and gather results
@@ -4321,22 +4340,45 @@ def get_and_save_dork_results(lookup_target, results_dir, type, lookup_keywords=
 			scan_history (startScan.ScanHistory): Scan History Object
 	"""
 	results = []
-	gofuzz_command = f'{GOFUZZ_EXEC_PATH} -t {lookup_target} -d {delay} -p {page_count}'
-	proxy = get_random_proxy()
-
-	if lookup_extensions:
-		gofuzz_command += f' -e {lookup_extensions}'
-	elif lookup_keywords:
-		gofuzz_command += f' -w {lookup_keywords}'
-
-	if proxy:
-		gofuzz_command += f' -r {proxy}'
-
-	output_file = f'{results_dir}/gofuzz.txt'
-	gofuzz_command += f' -o {output_file}'
-	history_file = f'{results_dir}/commands.txt'
-
+	
+	# Check for Google Custom Search API keys (required for GooFuzz)
+	# Format in env: GOOFUZZ_GCS_KEYS=CX_ID1,API_KEY1;CX_ID2,API_KEY2
+	gcs_keys = GOOFUZZ_GCS_KEYS.strip() if GOOFUZZ_GCS_KEYS else ''
+	if not gcs_keys:
+		logger.warning('GOOFUZZ_GCS_KEYS not configured. Skipping dorking. Set GOOFUZZ_GCS_KEYS in .env file with format: CX_ID1,API_KEY1;CX_ID2,API_KEY2')
+		return results
+	
+	# Create temporary file with API keys for GooFuzz
+	keys_file = None
 	try:
+		# Parse keys and write to temp file (one CX_ID,API_KEY per line)
+		key_pairs = [pair.strip() for pair in gcs_keys.split(';') if pair.strip()]
+		if not key_pairs:
+			logger.warning('GOOFUZZ_GCS_KEYS is set but contains no valid key pairs. Skipping dorking.')
+			return results
+		
+		# Create temp file for keys
+		keys_file = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+		for pair in key_pairs:
+			keys_file.write(f'{pair}\n')
+		keys_file.close()
+		
+		gofuzz_command = f'{GOFUZZ_EXEC_PATH} -t {lookup_target} -d {delay} -p {page_count}'
+		gofuzz_command += f' -k {keys_file.name}'
+		proxy = get_random_proxy()
+
+		if lookup_extensions:
+			gofuzz_command += f' -e {lookup_extensions}'
+		elif lookup_keywords:
+			gofuzz_command += f' -w {lookup_keywords}'
+
+		if proxy:
+			gofuzz_command += f' -r {proxy}'
+
+		output_file = f'{results_dir}/gofuzz.txt'
+		gofuzz_command += f' -o {output_file}'
+		history_file = f'{results_dir}/commands.txt'
+
 		run_command(
 			gofuzz_command,
 			shell=False,
@@ -4345,7 +4387,7 @@ def get_and_save_dork_results(lookup_target, results_dir, type, lookup_keywords=
 		)
 
 		if not os.path.isfile(output_file):
-			return
+			return results
 
 		with open(output_file) as f:
 			for line in f.readlines():
@@ -4364,6 +4406,13 @@ def get_and_save_dork_results(lookup_target, results_dir, type, lookup_keywords=
 
 	except Exception as e:
 		logger.exception(e)
+	finally:
+		# Clean up temp keys file
+		if keys_file and os.path.exists(keys_file.name):
+			try:
+				os.unlink(keys_file.name)
+			except Exception:
+				pass
 
 	return results
 

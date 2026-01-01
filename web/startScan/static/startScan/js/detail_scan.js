@@ -507,244 +507,313 @@ function get_osint_users(scan_id){
 }
 
 function get_screenshot(scan_id){
-	var port_array = [];
-	var service_array = [];
-	var tech_array = [];
-	var ip_array = [];
-	var gridzyElement = document.querySelector('.gridzy');
-	gridzyElement.classList.add('gridzySkinBlank');
-	gridzyElement.setAttribute('data-gridzy-layout', 'waterfall');
-	gridzyElement.setAttribute('data-gridzy-spaceBetween', 10);
-	gridzyElement.setAttribute('data-gridzy-desiredwidth', 350);
-	gridzyElement.setAttribute('data-gridzySearchField', "#screenshot-search");
-	var interesting_badge = `<span class="m-1 float-end badge  badge-soft-danger">Interesting</span>`;
-	$.getJSON(`/api/listSubdomains/?scan_id=${scan_id}&no_page&only_screenshot`, function(data) {
+	var screenshotData = [];
+	var container = document.getElementById('screenshots-table');
+	
+	if (!container) {
+		console.error('Screenshot container not found');
+		return;
+	}
+	
+	// Replace gridzy with our new gallery container
+	container.className = 'screenshot-gallery-container';
+	container.innerHTML = '';
+	
+	$.getJSON(`/api/listSubdomains/?scan_id=${scan_id}&no_page&only_screenshot`)
+	.done(function(data) {
 		$("#screenshot-loader").remove();
 		
 		// Check if there are any screenshots
 		if (!data || data.length === 0) {
 			$("#filter-screenshot").hide();
-			gridzyElement.innerHTML = '<div class="text-center text-muted p-5"><i class="fe-camera-off" style="font-size: 48px;"></i><p class="mt-3">No screenshots available for this scan.</p><p class="small">Screenshots are captured during the scan if the screenshot task is enabled in your scan engine configuration.</p></div>';
+			container.innerHTML = `
+				<div class="screenshot-empty-state">
+					<i class="fe-camera-off screenshot-empty-state-icon"></i>
+					<h4>No screenshots available</h4>
+					<p>Screenshots are captured during the scan if the screenshot task is enabled in your scan engine configuration.</p>
+				</div>`;
 			return;
 		}
 		
+		screenshotData = data;
 		$("#filter-screenshot").show();
-		for (var subdomain in data) {
-			var figure = document.createElement('figure');
-			var link = document.createElement('a');
-			// return `<a href="/media/`+data+`" data-lightbox="screenshots" data-title="&lt;a target='_blank' href='`+row['http_url']+`'&gt;&lt;h3 style=&quot;color:white&quot;&gt;`+row['name']+`&lt;/h3&gt;&lt;/a&gt;"><img src="/media/`+data+`" class="img-fluid rounded mb-4 mt-4 screenshot" onerror="removeImageElement(this)"></a>`;
-			// currently lookup is supported only for http_status, page title & subdomain name,
-			interesting_field = data[subdomain]['is_interesting'] ? 'interesting' : '';
-			var ips = data[subdomain]['ip_addresses'];
-			var ip_search_values = '';
-			for(var ip in ips){
-				ip_address = ips[ip]['address'];
-				ip_search_values += ip_address + ' ';
-			}
-			search_field = `${data[subdomain]['page_title']} ${data[subdomain]['name']} ${data[subdomain]['http_status']} ${ip_search_values} ${interesting_field}`;
-			link.setAttribute('data-lightbox', 'screenshot-gallery')
-			link.setAttribute('href', '/media/' + data[subdomain]['screenshot_path'])
-			link.setAttribute('data-title', `<a target='_blank' href='`+data[subdomain]['http_url']+`'><h3 style="color:white">`+data[subdomain]['name']+`</h3></a>`);
-			link.classList.add('img-fluid');
-			link.classList.add('rounded');
-			link.classList.add('screenshot-gallery');
-			link.classList.add('mb-4');
-			link.classList.add('mt-4');
-			link.setAttribute('data-gridzySearchText', search_field);
-			var newImage = document.createElement('img');
-			newImage.setAttribute('data-gridzylazysrc', '/media/' + data[subdomain]['screenshot_path']);
-			// newImage.setAttribute('data-gridzylazysrc', 'https://placeimg.com/1440/900/any?' + subdomain);
-			newImage.setAttribute('height', 500);
-			newImage.setAttribute('width', 500);
-			newImage.setAttribute('class', 'gridzyImage');
-			var figcaption = document.createElement('figcaption');
-			figcaption.setAttribute('class', 'gridzyCaption');
-			http_status_badge = 'danger';
-			if (data[subdomain]['http_status'] >=200 && data[subdomain]['http_status'] < 300){
-				http_status_badge = 'success';
-			}
-			else if (data[subdomain]['http_status'] >=300 && data[subdomain]['http_status'] < 400){
-				http_status_badge = 'warning';
-			}
-			page_title = data[subdomain]['page_title'] ? htmlEncode(data[subdomain]['page_title']) + '</br>': '' ;
-			subdomain_link = data[subdomain]['http_url'] ? `<a href="${data[subdomain]['http_url']}" target="_blank">${data[subdomain]['name']}</a>` : `<a href="https://${data[subdomain]['name']}" target="_blank">${data[subdomain]['name']}</a>`
-			http_status = data[subdomain]['http_status'] ? `<span class="m-1 float-end badge  badge-soft-${http_status_badge}">${data[subdomain]['http_status']}</span>` : '';
-			figcaption.innerHTML = data[subdomain]['is_interesting'] ? page_title + subdomain_link + interesting_badge + http_status : page_title + subdomain_link + http_status;
-			figure.appendChild(figcaption);
-			link.appendChild(newImage);
-			link.appendChild(figure);
-			gridzyElement.appendChild(link);
-
-			// add http status to filter values
-			filter_values = 'http_' + data[subdomain]['http_status'] + ' ';
-
-			// dynamic filtering menu
-			http_status = data[subdomain]['http_status'];
-			http_status_select = document.getElementById('http_select_filter');
-			if(!$('#http_select_filter').find("option:contains('" + http_status + "')").length){
-				var option = document.createElement('option');
-				option.value = ".http_" + http_status;
-				option.innerHTML = http_status;
-				http_status_select.appendChild(option);
-			}
-
-			// ip, port and services filtering
-			ips = data[subdomain]['ip_addresses']
-			for(var ip in ips){
-				ip_address = ips[ip]['address'];
-				filter_values += 'ip_' + ip_address.replace(/\./g,"_") + ' ';
-				if (ip_array.indexOf(ip_address) === -1){
-					ip_array.push(ip_address);
-				}
-
-				ports = ips[ip]['ports'];
-				for(var port in ports){
-					port_number = ips[ip]['ports'][port]['number'];
-					service_name = ips[ip]['ports'][port]['service_name'];
-
-					filter_values += 'port_' + port_number + ' ';
-					if (port_array.indexOf(port_number) === -1){
-						port_array.push(port_number);
-					}
-
-					filter_values += 'service_' + service_name + ' ';
-					if (service_array.indexOf(service_name) === -1){
-						service_array.push(service_name);
-					}
-				}
-			}
-
-			// technology stack filtering
-			technology = data[subdomain]['technologies'];
-			for(var tech in technology){
-				tech_name = technology[tech]['name']
-				filter_values += 'tech_' + tech_name.replace(/ /g,"_").toLowerCase() + ' ';
-				if (tech_array.indexOf(tech_name) === -1){
-					tech_array.push(tech_name);
-				}
-
-			}
-
-			link.setAttribute('class', filter_values);
+		
+		// Create grid container
+		let grid = document.createElement('div');
+		grid.className = 'screenshot-grid';
+		grid.id = 'screenshot-grid';
+		container.appendChild(grid);
+		
+		// Render screenshots
+		renderScreenshotGrid(data, grid);
+		
+		// Update screenshot count badge
+		updateScreenshotCount(data.length);
+		
+		// Setup search functionality using the original search bar
+		let searchInput = document.getElementById('screenshot-search');
+		if (searchInput) {
+			// Remove any existing listeners by cloning
+			let newSearchInput = searchInput.cloneNode(true);
+			searchInput.parentNode.replaceChild(newSearchInput, searchInput);
+			
+			newSearchInput.addEventListener('input', function(e) {
+				filterScreenshots(screenshotData, e.target.value.toLowerCase());
+			});
+			
+			// Update placeholder
+			newSearchInput.placeholder = 'Search by domain, title, status...';
 		}
-
-		// add port and service and tech to options
-		port_select = document.getElementById('ports_select_filter');
-		if (port_select) {
-			port_array.sort((a, b) => a - b);
-			for(var port in port_array){
-				if(!$('#ports_select_filter').find("option:contains('" + port_array[port] + "')").length){
-					var option = document.createElement('option');
-					option.value = ".port_" + port_array[port];
-					option.innerHTML = port_array[port];
-					port_select.appendChild(option);
-				}
-			}
+		
+		// Create lightbox container
+		if (!document.getElementById('screenshot-lightbox')) {
+			let lightbox = document.createElement('div');
+			lightbox.id = 'screenshot-lightbox';
+			lightbox.className = 'screenshot-lightbox';
+			lightbox.innerHTML = `
+				<div class="screenshot-lightbox-content">
+					<button class="screenshot-lightbox-close" onclick="closeScreenshotLightbox()">&times;</button>
+					<button class="screenshot-lightbox-nav prev" onclick="navigateScreenshot(-1)">&#8249;</button>
+					<button class="screenshot-lightbox-nav next" onclick="navigateScreenshot(1)">&#8250;</button>
+					<img class="screenshot-lightbox-image" src="" alt="Screenshot" />
+					<div class="screenshot-lightbox-info">
+						<div class="screenshot-lightbox-title"></div>
+					</div>
+				</div>
+			`;
+			lightbox.addEventListener('click', function(e) {
+				if (e.target === lightbox) closeScreenshotLightbox();
+			});
+			document.body.appendChild(lightbox);
 		}
+		
+		// Store data globally for lightbox navigation
+		window.screenshotGalleryData = data;
+		window.currentScreenshotIndex = 0;
+		
+		// Keyboard navigation
+		document.addEventListener('keydown', function(e) {
+			if (!document.getElementById('screenshot-lightbox').classList.contains('active')) return;
+			if (e.key === 'Escape') closeScreenshotLightbox();
+			if (e.key === 'ArrowLeft') navigateScreenshot(-1);
+			if (e.key === 'ArrowRight') navigateScreenshot(1);
+		});
+		
+		// Populate filter dropdowns
+		populateScreenshotFilters(data);
+	})
+	.fail(function(jqXHR, textStatus, errorThrown) {
+		console.error('Failed to load screenshots:', textStatus, errorThrown);
+		$("#screenshot-loader").remove();
+		container.innerHTML = `
+			<div class="screenshot-empty-state">
+				<i class="fe-alert-circle screenshot-empty-state-icon"></i>
+				<h4>Failed to load screenshots</h4>
+				<p>Error: ${textStatus}. Please try refreshing the page.</p>
+			</div>`;
+	});
+}
 
-		// add ip to select
-		ip_select = document.getElementById('ips_select_filter');
-		for(var ip in ip_array){
-			if(!$('#ips_select_filter').find("option:contains('" + ip_array[ip] + "')").length){
-				var option = document.createElement('option');
-				option.value = ".ip_" + ip_array[ip];
-				option.innerHTML = ip_array[ip];
+function renderScreenshotGrid(data, grid) {
+	grid.innerHTML = '';
+	
+	data.forEach((item, index) => {
+		let statusClass = 'danger';
+		if (item.http_status >= 200 && item.http_status < 300) statusClass = 'success';
+		else if (item.http_status >= 300 && item.http_status < 400) statusClass = 'warning';
+		
+		let card = document.createElement('div');
+		card.className = 'screenshot-item';
+		card.setAttribute('data-index', index);
+		card.setAttribute('data-search', `${item.name} ${item.page_title || ''} ${item.http_status || ''} ${item.http_url || ''}`.toLowerCase());
+		card.onclick = function() { openScreenshotLightbox(index); };
+		
+		let badgesHtml = '';
+		if (item.http_status) {
+			badgesHtml += `<span class="screenshot-badge screenshot-badge-status ${statusClass}">${item.http_status}</span>`;
+		}
+		if (item.is_interesting) {
+			badgesHtml += `<span class="screenshot-badge screenshot-badge-interesting">★</span>`;
+		}
+		
+		card.innerHTML = `
+			<img src="/media/${item.screenshot_path}" alt="${item.name}" loading="lazy" onerror="this.parentElement.style.display='none'" />
+			<div class="screenshot-item-badges">${badgesHtml}</div>
+			<div class="screenshot-item-overlay">
+				<div class="screenshot-item-title">${htmlEncode(item.page_title || item.name)}</div>
+				<div class="screenshot-item-subtitle">${item.name}</div>
+			</div>
+		`;
+		
+		grid.appendChild(card);
+	});
+}
+
+function filterScreenshots(data, query) {
+	let grid = document.getElementById('screenshot-grid');
+	if (!grid) return;
+	
+	let filtered = query ? data.filter(item => {
+		let searchStr = `${item.name} ${item.page_title || ''} ${item.http_status || ''} ${item.http_url || ''}`.toLowerCase();
+		return searchStr.includes(query);
+	}) : data;
+	
+	renderScreenshotGrid(filtered, grid);
+	
+	// Update count badge
+	updateScreenshotCount(filtered.length);
+	
+	// Update global data for lightbox navigation
+	window.screenshotGalleryData = filtered;
+}
+
+function updateScreenshotCount(count) {
+	let badge = document.getElementById('screenshot-count-badge');
+	if (badge) {
+		badge.textContent = count;
+	}
+}
+
+function openScreenshotLightbox(index) {
+	let data = window.screenshotGalleryData;
+	if (!data || !data[index]) return;
+	
+	window.currentScreenshotIndex = index;
+	let item = data[index];
+	
+	let lightbox = document.getElementById('screenshot-lightbox');
+	lightbox.querySelector('.screenshot-lightbox-image').src = '/media/' + item.screenshot_path;
+	
+	let url = item.http_url || `https://${item.name}`;
+	lightbox.querySelector('.screenshot-lightbox-title').innerHTML = `
+		<a href="${url}" target="_blank">${item.name}</a>
+		${item.page_title ? `<br><span style="opacity: 0.7; font-size: 14px;">${htmlEncode(item.page_title)}</span>` : ''}
+	`;
+	
+	lightbox.classList.add('active');
+	document.body.style.overflow = 'hidden';
+}
+
+function closeScreenshotLightbox() {
+	document.getElementById('screenshot-lightbox').classList.remove('active');
+	document.body.style.overflow = '';
+}
+
+function navigateScreenshot(direction) {
+	let data = window.screenshotGalleryData;
+	if (!data) return;
+	
+	let newIndex = window.currentScreenshotIndex + direction;
+	if (newIndex < 0) newIndex = data.length - 1;
+	if (newIndex >= data.length) newIndex = 0;
+	
+	openScreenshotLightbox(newIndex);
+}
+
+function populateScreenshotFilters(data) {
+	let port_array = [];
+	let service_array = [];
+	let tech_array = [];
+	let ip_array = [];
+	
+	data.forEach(item => {
+		// HTTP status
+		let http_status = item.http_status;
+		let http_status_select = document.getElementById('http_select_filter');
+		if (http_status_select && http_status && !$('#http_select_filter').find("option:contains('" + http_status + "')").length) {
+			let option = document.createElement('option');
+			option.value = http_status;
+			option.innerHTML = http_status;
+			http_status_select.appendChild(option);
+		}
+		
+		// IPs and ports
+		let ips = item.ip_addresses || [];
+		ips.forEach(ipData => {
+			let ip_address = ipData.address;
+			if (ip_address && ip_array.indexOf(ip_address) === -1) {
+				ip_array.push(ip_address);
+			}
+			
+			let ports = ipData.ports || [];
+			ports.forEach(portData => {
+				if (portData.number && port_array.indexOf(portData.number) === -1) {
+					port_array.push(portData.number);
+				}
+				if (portData.service_name && service_array.indexOf(portData.service_name) === -1) {
+					service_array.push(portData.service_name);
+				}
+			});
+		});
+		
+		// Technologies
+		let technologies = item.technologies || [];
+		technologies.forEach(tech => {
+			if (tech.name && tech_array.indexOf(tech.name) === -1) {
+				tech_array.push(tech.name);
+			}
+		});
+	});
+	
+	// Populate port select
+	let port_select = document.getElementById('ports_select_filter');
+	if (port_select) {
+		port_array.sort((a, b) => a - b);
+		port_array.forEach(port => {
+			if (!$('#ports_select_filter').find("option:contains('" + port + "')").length) {
+				let option = document.createElement('option');
+				option.value = port;
+				option.innerHTML = port;
+				port_select.appendChild(option);
+			}
+		});
+	}
+	
+	// Populate IP select
+	let ip_select = document.getElementById('ips_select_filter');
+	if (ip_select) {
+		ip_array.forEach(ip => {
+			if (!$('#ips_select_filter').find("option:contains('" + ip + "')").length) {
+				let option = document.createElement('option');
+				option.value = ip;
+				option.innerHTML = ip;
 				ip_select.appendChild(option);
 			}
-		}
-
+		});
+	}
+	
+	// Populate service select
+	let service_select = document.getElementById('services_select_filter');
+	if (service_select) {
 		service_array.sort();
-		service_select = document.getElementById('services_select_filter');
-		if (service_select) {
-			for(var service in service_array){
-				if(!$('#services_select_filter').find("option:contains('" + service_array[service] + "')").length){
-					var option = document.createElement('option');
-					option.value = ".service_" + service_array[service];
-					option.innerHTML = service_array[service];
-					service_select.appendChild(option);
-				}
+		service_array.forEach(service => {
+			if (!$('#services_select_filter').find("option:contains('" + service + "')").length) {
+				let option = document.createElement('option');
+				option.value = service;
+				option.innerHTML = service;
+				service_select.appendChild(option);
 			}
-		}
-
-		tech_select = document.getElementById('tech_select_filter');
-		for(var tech in tech_array){
-			if(!$('#tech_select_filter').find("option:contains('" + tech_array[tech] + "')").length){
-				var option = document.createElement('option');
-				option.value = ".tech_" + tech_array[tech].replace(/ /g,"_").toLowerCase();
-				option.innerHTML = tech_array[tech];
+		});
+	}
+	
+	// Populate tech select
+	let tech_select = document.getElementById('tech_select_filter');
+	if (tech_select) {
+		tech_array.sort();
+		tech_array.forEach(tech => {
+			if (!$('#tech_select_filter').find("option:contains('" + tech + "')").length) {
+				let option = document.createElement('option');
+				option.value = tech;
+				option.innerHTML = tech;
 				tech_select.appendChild(option);
 			}
-		}
-
-		$(".tagging").select2({
-			tags: true
 		});
-		// search functionality
-		var gridzyElements = document.querySelectorAll('.gridzySkinBlank[data-gridzySearchField]'),
-		pos = gridzyElements.length;
-
-		while (pos--) {
-			(function(gridzyElement) {
-				var searchField = document.querySelector(gridzyElement.getAttribute('data-gridzySearchField'));
-				var gridzyInstance = gridzyElement.gridzy;
-				var gridzyItems = gridzyElement.children;
-
-				if (searchField) {
-					searchField.addEventListener('input', search);
-				}
-
-				function search() {
-					var pos = gridzyItems.length,
-					child,
-					itemContent,
-					found = false,
-					searchValue = searchField.value.toLowerCase();
-
-					if (searchValue) {
-						while (pos--) {
-							child = gridzyItems[pos];
-							itemContent = (child.getAttribute('data-gridzySearchText') || child.innerText).toLowerCase();
-							found = -1 < itemContent.search(searchValue);
-							child.classList[found ? 'add' : 'remove']('searchResult');
-						}
-						if (gridzyInstance.getOption('filter') !== '.searchResult') {
-							gridzyInstance.setOptions({filter:'.searchResult'});
-						}
-					} else {
-						while (pos--) {
-							gridzyItems[pos].classList.remove('searchResult');
-						}
-						if (gridzyInstance.getOption('filter') !== Gridzy.getDefaultOption('filter')) {
-							gridzyInstance.setOptions({filter:null});
-						}
-					}
-				}
-			})(gridzyElements[pos]);
-		}
-
-		//filter functionality
-		var gridzyInstance = document.querySelector('.gridzySkinBlank').gridzy;
-		$('#http_select_filter, #ips_select_filter, #services_select_filter, #ports_select_filter, #tech_select_filter').on('change', function() {
-			values = $(this).val();
-			console.log(values);
-			if(values.length && this.id == 'ips_select_filter'){
-				var replaces_str = values.map(function(values){return values.replace(/(?<=\..*)\./g, '_');});
-				console.log(replaces_str);
-				gridzyInstance.setOptions({
-					filter: replaces_str
-				});
-			}
-			else if(values.length && this.id != 'ips_select_filter'){
-				gridzyInstance.setOptions({
-					filter: values
-				});
-			}
-			else{
-				gridzyInstance.setOptions({
-					filter: '*'
-				});
-			}
-		});
+	}
+	
+	// Initialize select2 on filter dropdowns
+	$(".tagging").select2({
+		tags: true,
+		placeholder: "Select to filter..."
 	});
 }
 
