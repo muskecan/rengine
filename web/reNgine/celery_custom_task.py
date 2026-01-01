@@ -205,17 +205,29 @@ class RengineTask(Task):
 		if not self.track:
 			return
 
-		# Trim error before saving to DB
-		error_message = self.error
-		if self.error and len(self.error) > 300:
-			error_message = self.error[:288] + '...[trimmed]'
+		# Ensure activity exists
+		if not hasattr(self, 'activity') or not self.activity:
+			logger.error(f'Cannot update scan activity - activity object not found for task {self.task_name}')
+			return
 
-		self.activity.status = self.status
-		self.activity.error_message = error_message
-		self.activity.traceback = self.traceback
-		self.activity.time = timezone.now()
-		self.activity.save()
-		self.notify()
+		try:
+			# Refresh activity from database to avoid stale object issues
+			self.activity.refresh_from_db()
+			
+			# Trim error before saving to DB
+			error_message = self.error
+			if self.error and len(self.error) > 300:
+				error_message = self.error[:288] + '...[trimmed]'
+
+			self.activity.status = self.status
+			self.activity.error_message = error_message
+			self.activity.traceback = self.traceback
+			self.activity.time = timezone.now()
+			self.activity.save()
+			logger.info(f'Updated activity {self.activity_id} for task {self.task_name} to status {self.status}')
+			self.notify()
+		except Exception as e:
+			logger.exception(f'Failed to update scan activity for task {self.task_name}: {e}')
 
 	def notify(self, name=None, severity=None, fields={}, add_meta_info=True):
 		# Import here to avoid Celery circular import and be able to use `delay`
