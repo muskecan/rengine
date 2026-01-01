@@ -859,12 +859,136 @@ class CVEDetails(APIView):
 		response = requests.get('https://cve.circl.lu/api/cve/' + cve_id)
 
 		if response.status_code != 200:
-			return  Response({'status': False, 'message': 'Unknown Error Occured!'})
+			return Response({'status': False, 'message': 'Unknown Error Occured!'})
 
 		if not response.json():
-			return  Response({'status': False, 'message': 'CVE ID does not exists.'})
+			return Response({'status': False, 'message': 'CVE ID does not exists.'})
 
-		return Response({'status': True, 'result': response.json()})
+		raw_data = response.json()
+		
+		# Transform new CVE JSON 5.0 format to legacy format expected by frontend
+		result = self._transform_cve_response(raw_data, cve_id)
+		
+		return Response({'status': True, 'result': result})
+
+	def _transform_cve_response(self, data, cve_id):
+		"""Transform CVE JSON 5.0 format to legacy format for frontend compatibility."""
+		# If already in legacy format, return as-is
+		if 'summary' in data or 'cvss' in data:
+			return data
+		
+		result = {
+			'id': cve_id,
+			'summary': '',
+			'assigner': '',
+			'cvss': None,
+			'cvss-vector': '',
+			'impact': {
+				'confidentiality': None,
+				'integrity': None,
+				'availability': None
+			},
+			'access': {
+				'complexity': None,
+				'authentication': None
+			},
+			'cwe': None,
+			'references': [],
+			'vulnerable_product': [],
+			'vulnerable_configuration': []
+		}
+		
+		try:
+			# Extract from cveMetadata
+			cve_metadata = data.get('cveMetadata', {})
+			result['assigner'] = cve_metadata.get('assignerShortName', cve_metadata.get('assignerOrgId', ''))
+			
+			# Extract from containers
+			containers = data.get('containers', {})
+			cna = containers.get('cna', {})
+			
+			# Get description
+			descriptions = cna.get('descriptions', [])
+			for desc in descriptions:
+				if desc.get('lang', '').startswith('en'):
+					result['summary'] = desc.get('value', '')
+					break
+			if not result['summary'] and descriptions:
+				result['summary'] = descriptions[0].get('value', '')
+			
+			# Get CVSS metrics
+			metrics = cna.get('metrics', [])
+			for metric in metrics:
+				# Try CVSS 3.1 first
+				cvss31 = metric.get('cvssV3_1', {})
+				if cvss31:
+					result['cvss'] = cvss31.get('baseScore')
+					result['cvss-vector'] = cvss31.get('vectorString', '')
+					result['impact']['confidentiality'] = cvss31.get('confidentialityImpact')
+					result['impact']['integrity'] = cvss31.get('integrityImpact')
+					result['impact']['availability'] = cvss31.get('availabilityImpact')
+					result['access']['complexity'] = cvss31.get('attackComplexity')
+					result['access']['authentication'] = cvss31.get('privilegesRequired')
+					break
+				# Try CVSS 3.0
+				cvss30 = metric.get('cvssV3_0', {})
+				if cvss30:
+					result['cvss'] = cvss30.get('baseScore')
+					result['cvss-vector'] = cvss30.get('vectorString', '')
+					result['impact']['confidentiality'] = cvss30.get('confidentialityImpact')
+					result['impact']['integrity'] = cvss30.get('integrityImpact')
+					result['impact']['availability'] = cvss30.get('availabilityImpact')
+					result['access']['complexity'] = cvss30.get('attackComplexity')
+					result['access']['authentication'] = cvss30.get('privilegesRequired')
+					break
+				# Try CVSS 2.0
+				cvss2 = metric.get('cvssV2_0', {})
+				if cvss2:
+					result['cvss'] = cvss2.get('baseScore')
+					result['cvss-vector'] = cvss2.get('vectorString', '')
+					result['impact']['confidentiality'] = cvss2.get('confidentialityImpact')
+					result['impact']['integrity'] = cvss2.get('integrityImpact')
+					result['impact']['availability'] = cvss2.get('availabilityImpact')
+					result['access']['complexity'] = cvss2.get('accessComplexity')
+					result['access']['authentication'] = cvss2.get('authentication')
+					break
+			
+			# Get CWE
+			problem_types = cna.get('problemTypes', [])
+			for pt in problem_types:
+				for desc in pt.get('descriptions', []):
+					cwe_id = desc.get('cweId', '')
+					if cwe_id:
+						result['cwe'] = cwe_id
+						break
+				if result['cwe']:
+					break
+			
+			# Get references
+			refs = cna.get('references', [])
+			result['references'] = [ref.get('url', '') for ref in refs if ref.get('url')]
+			
+			# Get affected products
+			affected = cna.get('affected', [])
+			for aff in affected:
+				vendor = aff.get('vendor', '')
+				product = aff.get('product', '')
+				if vendor and product:
+					result['vulnerable_product'].append(f"{vendor}:{product}")
+				versions = aff.get('versions', [])
+				for ver in versions:
+					version_str = ver.get('version', '')
+					status = ver.get('status', '')
+					if version_str:
+						result['vulnerable_configuration'].append({
+							'id': f"{vendor}:{product}:{version_str}",
+							'status': status
+						})
+		except Exception as e:
+			# If transformation fails, return basic info
+			result['summary'] = f"Error parsing CVE data: {str(e)}"
+		
+		return result
 
 
 class AddReconNote(APIView):

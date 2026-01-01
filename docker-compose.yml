@@ -27,6 +27,9 @@ services:
     restart: always
     entrypoint: /usr/src/app/celery-entrypoint.sh
     # command: celery -A reNgine worker --autoscale=${MAX_CONCURRENCY},${MIN_CONCURRENCY} -l INFO
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     volumes:
       - ./web:/usr/src/app
       - github_repos:/usr/src/github
@@ -58,6 +61,9 @@ services:
     build: ./web
     entrypoint: /usr/src/app/beat-entrypoint.sh
     command: celery -A reNgine beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     environment:
       - CELERY_BROKER=redis://redis:6379/0
       - CELERY_BACKEND=redis://redis:6379/0
@@ -86,6 +92,9 @@ services:
     entrypoint: /usr/src/app/entrypoint.sh
     restart: always
     image: docker.pkg.github.com/yogeshojha/rengine/rengine:latest
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     environment:
       - DEBUG=0
       - CELERY_BROKER=redis://redis:6379/0

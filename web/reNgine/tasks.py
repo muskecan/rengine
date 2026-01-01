@@ -470,6 +470,7 @@ def subdomain_discovery(
 				cmd += f' -proxy {proxy}' if proxy else ''
 				cmd += f' -timeout {timeout}' if timeout else ''
 				cmd += f' -t {threads}' if threads else ''
+				cmd += f' -all -nW'  # Use all sources and remove wildcards
 				cmd += f' -silent'
 
 			elif tool == 'oneforall':
@@ -481,7 +482,9 @@ def subdomain_discovery(
 			elif tool == 'ctfr':
 				results_file = self.results_dir + '/subdomains_ctfr.txt'
 				cmd = f'python3 /usr/src/github/ctfr/ctfr.py -d {host} -o {results_file}'
-				cmd_extract = f"cat {results_file} | sed 's/\*.//g' | tail -n +12 | uniq | sort > {results_file}"
+				# Clean ctfr output: remove [-] prefix (with 1-2 spaces), remove *. wildcards, keep only valid subdomains
+				host_escaped = host.replace('.', '\\.')
+				cmd_extract = f"cat {results_file} | sed 's/^\\[-\\] *//' | sed 's/^\\*\\.//' | sed 's/^\\*//' | sed 's/^\\.//' | grep -v '^\\[' | grep -v '^$' | grep -E '^[a-zA-Z0-9][a-zA-Z0-9.-]*{host_escaped}$' | sort -u > {results_file}.tmp && mv {results_file}.tmp {results_file}"
 				cmd += f' && {cmd_extract}'
 
 			elif tool == 'tlsx':
@@ -557,6 +560,11 @@ def subdomain_discovery(
 		history_file=self.history_file,
 		scan_id=self.scan_id,
 		activity_id=self.activity_id)
+
+	# Validate output file exists and has content
+	if not os.path.isfile(self.output_path) or os.path.getsize(self.output_path) == 0:
+		logger.warning(f'No subdomains found in output file: {self.output_path}')
+		return []
 
 	with open(self.output_path) as f:
 		lines = f.readlines()
@@ -1068,20 +1076,28 @@ def theHarvester(config, host, scan_history_id, activity_id, results_dir, ctx={}
 	# Run cmd
 	run_command(
 		cmd,
-		shell=False,
+		shell=True,
 		cwd=theHarvester_dir,
 		history_file=history_file,
 		scan_id=scan_history_id,
 		activity_id=activity_id)
 
-	# Get file location
+	# Validate output file exists and has content
 	if not os.path.isfile(output_path_json):
 		logger.error(f'Could not open {output_path_json}')
 		return {}
+	
+	if os.path.getsize(output_path_json) == 0:
+		logger.warning(f'theHarvester output file is empty: {output_path_json}')
+		return {}
 
 	# Load theHarvester results
-	with open(output_path_json, 'r') as f:
-		data = json.load(f)
+	try:
+		with open(output_path_json, 'r') as f:
+			data = json.load(f)
+	except (json.JSONDecodeError, IOError) as e:
+		logger.error(f'Failed to parse theHarvester output: {e}')
+		return {}
 
 	# Re-indent theHarvester JSON
 	with open(output_path_json, 'w') as f:
@@ -1173,13 +1189,23 @@ def h8mail(config, host, scan_history_id, activity_id, results_dir, ctx={}):
 
 	run_command(
 		cmd,
+		shell=True,
 		history_file=history_file,
 		scan_id=scan_history_id,
 		activity_id=activity_id)
 
-	with open(output_file) as f:
-		data = json.load(f)
-		creds = data.get('targets', [])
+	# Validate output file exists and has content
+	if not os.path.isfile(output_file) or os.path.getsize(output_file) == 0:
+		logger.warning(f'h8mail did not produce output at {output_file}')
+		return []
+
+	try:
+		with open(output_file) as f:
+			data = json.load(f)
+			creds = data.get('targets', [])
+	except (json.JSONDecodeError, IOError) as e:
+		logger.error(f'Failed to parse h8mail output: {e}')
+		return []
 
 	# TODO: go through h8mail output and save emails to DB
 	for cred in creds:
@@ -1195,15 +1221,17 @@ def h8mail(config, host, scan_history_id, activity_id, results_dir, ctx={}):
 
 @app.task(name='screenshot', queue='main_scan_queue', base=RengineTask, bind=True)
 def screenshot(self, ctx={}, description=None):
-	"""Uses EyeWitness to gather screenshot of a domain and/or url.
+	"""Uses gowitness to gather screenshots of subdomains and endpoints.
 
 	Args:
 		description (str, optional): Task description shown in UI.
 	"""
+	import json
+	from urllib.parse import urlparse
 
 	# Config
 	screenshots_path = f'{self.results_dir}/screenshots'
-	output_path = f'{screenshots_path}/open_ports.csv'  # EyeWitness outputs to open_ports.csv
+	output_json = f'{screenshots_path}/gowitness.jsonl'
 	alive_endpoints_file = f'{self.results_dir}/endpoints_alive.txt'
 	config = self.yaml_configuration.get(SCREENSHOT) or {}
 	enable_http_crawl = config.get(ENABLE_HTTP_CRAWL, DEFAULT_ENABLE_HTTP_CRAWL)
@@ -1213,6 +1241,9 @@ def screenshot(self, ctx={}, description=None):
 
 	# If intensity is normal, grab only the root endpoints of each subdomain
 	strict = True if intensity == 'normal' else False
+
+	# Create screenshots directory
+	os.makedirs(screenshots_path, exist_ok=True)
 
 	# Get URLs to take screenshot of
 	get_http_urls(
@@ -1241,68 +1272,88 @@ def screenshot(self, ctx={}, description=None):
 	notification = Notification.objects.first()
 	send_output_file = notification.send_scan_output_file if notification else False
 
-	# Run cmd
-	cmd = f'python3 /usr/src/github/EyeWitness/Python/EyeWitness.py -f {alive_endpoints_file} -d {screenshots_path} --no-prompt'
-	cmd += f' --timeout {timeout}' if timeout > 0 else ''
-	cmd += f' --threads {threads}' if threads > 0 else ''
+	# Build gowitness command
+	# gowitness 3.x syntax: gowitness scan file -f urls.txt -s screenshots/ --write-jsonl --write-jsonl-file output.jsonl
+	cmd = f'gowitness scan file -f {alive_endpoints_file} -s {screenshots_path} --write-jsonl --write-jsonl-file {output_json}'
+	cmd += ' --chrome-path /usr/bin/chromium'  # Explicit path for Docker compatibility
+	cmd += f' -T {timeout}' if timeout > 0 else ''
+	cmd += f' -t {threads}' if threads > 0 else ''
+	
 	run_command(
 		cmd,
-		shell=False,
-		history_file=self.history_file,
-		scan_id=self.scan_id,
-		activity_id=self.activity_id)
-	if not os.path.isfile(output_path):
-		logger.error(f'EyeWitness did not generate output file at {output_path} for {self.domain.name}. Check if EyeWitness is installed correctly.')
-		return
-
-	# Loop through results and save objects in DB
-	screenshot_paths = []
-	required_cols = [
-		'Protocol',
-		'Port',
-		'Domain',
-		'Request Status',
-		'Screenshot Path'
-	]
-	with open(output_path, 'r', newline='') as file:
-		reader = csv.DictReader(file)
-		for row in reader:
-			parsed_row = {col: row[col] for col in required_cols if col in row}
-			protocol = parsed_row['Protocol']
-			port = parsed_row['Port']
-			subdomain_name = parsed_row['Domain']
-			status = parsed_row['Request Status']
-			screenshot_path = parsed_row['Screenshot Path']
-			logger.info(f'{protocol}:{port}:{subdomain_name}:{status}')
-			subdomain_query = Subdomain.objects.filter(name=subdomain_name)
-			if self.scan:
-				subdomain_query = subdomain_query.filter(scan_history=self.scan)
-			if status == 'Successful' and subdomain_query.exists():
-				subdomain = subdomain_query.first()
-				screenshot_paths.append(screenshot_path)
-				subdomain.screenshot_path = screenshot_path.replace('/usr/src/scan_results/', '')
-				subdomain.save()
-				logger.warning(f'Added screenshot for {subdomain.name} to DB')
-
-	# Remove all db, html extra files in screenshot results
-	run_command(
-		f'rm -rf {screenshots_path}/*.csv {screenshots_path}/*.db {screenshots_path}/*.js {screenshots_path}/*.html {screenshots_path}/*.css',
 		shell=True,
 		history_file=self.history_file,
 		scan_id=self.scan_id,
 		activity_id=self.activity_id)
+
+	# Check if gowitness output exists
+	if not os.path.isfile(output_json):
+		logger.error(f'gowitness did not generate output file at {output_json} for {self.domain.name}.')
+		return
+
+	# Parse gowitness JSONL output and save to database
+	screenshot_paths = []
+	with open(output_json, 'r') as f:
+		for line in f:
+			if not line.strip():
+				continue
+			try:
+				result = json.loads(line)
+				url = result.get('url', '')
+				screenshot_file = result.get('screenshot_path', '') or result.get('filename', '')
+				response_code = result.get('response_code', 0)
+				page_title = result.get('title', '')
+				
+				# Skip failed screenshots
+				if not screenshot_file or response_code == 0:
+					continue
+				
+				# Extract subdomain from URL
+				parsed_url = urlparse(url)
+				subdomain_name = parsed_url.netloc
+				# Remove port if present
+				if ':' in subdomain_name:
+					subdomain_name = subdomain_name.split(':')[0]
+				
+				# Find matching subdomain in database
+				subdomain_query = Subdomain.objects.filter(name=subdomain_name)
+				if self.scan:
+					subdomain_query = subdomain_query.filter(scan_history=self.scan)
+				
+				if subdomain_query.exists():
+					subdomain = subdomain_query.first()
+					# Build relative path for storage
+					relative_screenshot_path = screenshot_file.replace('/usr/src/scan_results/', '')
+					screenshot_paths.append(screenshot_file)
+					subdomain.screenshot_path = relative_screenshot_path
+					if page_title and not subdomain.page_title:
+						subdomain.page_title = page_title[:500]  # Limit title length
+					subdomain.save()
+					logger.info(f'Added screenshot for {subdomain.name}: {relative_screenshot_path}')
+			except json.JSONDecodeError as e:
+				logger.warning(f'Failed to parse gowitness JSON line: {e}')
+				continue
+			except Exception as e:
+				logger.warning(f'Error processing screenshot result: {e}')
+				continue
+
+	# Cleanup: remove JSONL and any db files
 	run_command(
-		f'rm -rf {screenshots_path}/source',
+		f'rm -rf {screenshots_path}/*.jsonl {screenshots_path}/*.sqlite3',
 		shell=True,
 		history_file=self.history_file,
 		scan_id=self.scan_id,
 		activity_id=self.activity_id)
 
 	# Send finish notifs
-	screenshots_str = '• ' + '\n• '.join([f'`{path}`' for path in screenshot_paths])
-	self.notify(fields={'Screenshots': screenshots_str})
+	if screenshot_paths:
+		screenshots_str = '• ' + '\n• '.join([f'`{os.path.basename(path)}`' for path in screenshot_paths[:20]])
+		if len(screenshot_paths) > 20:
+			screenshots_str += f'\n• ... and {len(screenshot_paths) - 20} more'
+		self.notify(fields={'Screenshots': f'{len(screenshot_paths)} captured', 'Samples': screenshots_str})
+	
 	if send_output_file:
-		for path in screenshot_paths:
+		for path in screenshot_paths[:5]:  # Limit to 5 files to avoid spam
 			title = get_output_file_name(
 				self.scan_id,
 				self.subscan_id,
@@ -1355,7 +1406,7 @@ def port_scan(self, hosts=[], ctx={}, description=None):
 
 	# Build cmd
 	cmd = 'naabu -json -exclude-cdn'
-	cmd += f' -list {input_file}' if len(hosts) > 0 else f' -host {hosts[0]}'
+	cmd += f' -host {hosts[0]}' if len(hosts) == 1 else f' -list {input_file}'
 	if 'full' in ports or 'all' in ports:
 		ports_str = ' -p "-"'
 	elif 'top-100' in ports:
@@ -1373,6 +1424,7 @@ def port_scan(self, hosts=[], ctx={}, description=None):
 	cmd += f' -timeout {timeout}s' if timeout > 0 else ''
 	cmd += f' -passive' if passive else ''
 	cmd += f' -exclude-ports {exclude_ports_str}' if exclude_ports else ''
+	cmd += f' -sD' if not nmap_enabled else ''  # Service detection when nmap disabled
 	cmd += f' -silent'
 
 	# Execute cmd and gather results
@@ -1603,34 +1655,41 @@ def waf_detection(self, ctx={}, description=None):
 		ctx=ctx
 	)
 
-	cmd = f'wafw00f -i {input_path} -o {self.output_path}'
+	# Use JSON output for reliable parsing
+	json_output_path = self.output_path.replace('.txt', '.json')
+	cmd = f'wafw00f -i {input_path} -o {json_output_path} -f json'
 	run_command(
 		cmd,
+		shell=True,
 		history_file=self.history_file,
 		scan_id=self.scan_id,
 		activity_id=self.activity_id)
-	if not os.path.isfile(self.output_path):
-		logger.error(f'Could not find {self.output_path}')
+	if not os.path.isfile(json_output_path):
+		logger.error(f'Could not find {json_output_path}')
 		return
 
-	with open(self.output_path) as file:
-		wafs = file.readlines()
+	wafs_detected = []
+	try:
+		with open(json_output_path) as file:
+			wafs_data = json.load(file)
+	except json.JSONDecodeError as e:
+		logger.error(f'Failed to parse wafw00f JSON output: {e}')
+		return wafs_detected
 
-	for line in wafs:
-		line = " ".join(line.split())
-		splitted = line.split(' ', 1)
-		waf_info = splitted[1].strip()
-		waf_name = waf_info[:waf_info.find('(')].strip()
-		waf_manufacturer = waf_info[waf_info.find('(')+1:waf_info.find(')')].strip().replace('.', '')
-		http_url = sanitize_url(splitted[0].strip())
-		if not waf_name or waf_name == 'None':
+	for waf_entry in wafs_data:
+		http_url = sanitize_url(waf_entry.get('url', ''))
+		waf_name = waf_entry.get('firewall', '') or waf_entry.get('waf', '')
+		waf_manufacturer = waf_entry.get('manufacturer', '')
+		
+		if not waf_name or waf_name.lower() in ['none', 'generic', '']:
 			continue
 
 		# Add waf to db
 		waf, _ = Waf.objects.get_or_create(
 			name=waf_name,
-			manufacturer=waf_manufacturer
+			manufacturer=waf_manufacturer.replace('.', '') if waf_manufacturer else ''
 		)
+		wafs_detected.append(waf)
 
 		# Add waf info to Subdomain in DB
 		subdomain = get_subdomain_from_url(http_url)
@@ -1638,7 +1697,7 @@ def waf_detection(self, ctx={}, description=None):
 		subdomain_query, _ = Subdomain.objects.get_or_create(scan_history=self.scan, name=subdomain)
 		subdomain_query.waf.add(waf)
 		subdomain_query.save()
-	return wafs
+	return wafs_detected
 
 
 @app.task(name='dir_file_fuzz', queue='main_scan_queue', base=RengineTask, bind=True)
@@ -1697,7 +1756,7 @@ def dir_file_fuzz(self, ctx={}, description=None):
 	cmd += f' -mc {mc}' if mc else ''
 	formatted_headers = ' '.join(f'-H "{header}"' for header in custom_headers)
 	if formatted_headers:
-		cmd += formatted_headers
+		cmd += f' {formatted_headers}'
 
 	# Grab URLs to fuzz
 	urls = get_http_urls(
@@ -1879,8 +1938,8 @@ def fetch_url(self, urls=[], ctx={}, description=None):
 		'gau': f'gau',
 		'hakrawler': 'hakrawler -subs -u',
 		'waybackurls': 'waybackurls',
-		'gospider': f'gospider -S {input_path} --js -d 2 --sitemap --robots -w -r',
-		'katana': f'katana -list {input_path} -silent -jc -kf all -d 3 -fs rdn',
+		'gospider': f'gospider --js -d 2 --sitemap --robots -w -r -s',
+		'katana': f'katana -silent -jc -kf all -d 3 -fs rdn',
 	}
 	if proxy:
 		cmd_map['gau'] += f' --proxy "{proxy}"'
@@ -1894,9 +1953,10 @@ def fetch_url(self, urls=[], ctx={}, description=None):
 	if custom_headers:
 		# gau, waybackurls does not support custom headers
 		formatted_headers = ' '.join(f'-H "{header}"' for header in custom_headers)
-		cmd_map['gospider'] += formatted_headers
-		cmd_map['hakrawler'] += ';;'.join(header for header in custom_headers)
-		cmd_map['katana'] += formatted_headers
+		cmd_map['gospider'] += f' {formatted_headers}'
+		hakrawler_headers = ' '.join(f'-h "{header}"' for header in custom_headers)
+		cmd_map['hakrawler'] += f' {hakrawler_headers}'
+		cmd_map['katana'] += f' {formatted_headers}'
 	cat_input = f'cat {input_path}'
 	grep_output = f'grep -Eo {host_regex}'
 	cmd_map = {
@@ -2497,7 +2557,7 @@ def nuclei_scan(self, urls=[], ctx={}, description=None):
 	cmd += f' -irr'
 	formatted_headers = ' '.join(f'-H "{header}"' for header in custom_headers)
 	if formatted_headers:
-		cmd += formatted_headers
+		cmd += f' {formatted_headers}'
 	cmd += f' -l {input_path}'
 	cmd += f' -c {str(concurrency)}' if concurrency > 0 else ''
 	cmd += f' -proxy {proxy} ' if proxy else ''
@@ -2593,7 +2653,7 @@ def dalfox_xss_scan(self, urls=[], ctx={}, description=None):
 	cmd += f' --timeout {timeout}' if timeout else ''
 	formatted_headers = ' '.join(f'-H "{header}"' for header in custom_headers)
 	if formatted_headers:
-		cmd += formatted_headers
+		cmd += f' {formatted_headers}'
 	cmd += f' --user-agent {user_agent}' if user_agent else ''
 	cmd += f' --worker {threads}' if threads else ''
 	cmd += f' --format json'
@@ -2719,20 +2779,21 @@ def crlfuzz_scan(self, urls=[], ctx={}, description=None):
 	cmd += f' -x {proxy}' if proxy else ''
 	formatted_headers = ' '.join(f'-H "{header}"' for header in custom_headers)
 	if formatted_headers:
-		cmd += formatted_headers
+		cmd += f' {formatted_headers}'
 	cmd += f' -o {output_path}'
 
 	run_command(
 		cmd,
-		shell=False,
+		shell=True,
 		history_file=self.history_file,
 		scan_id=self.scan_id,
 		activity_id=self.activity_id
 	)
 
-	if not os.path.isfile(output_path):
+	# Validate output file exists and has content
+	if not os.path.isfile(output_path) or os.path.getsize(output_path) == 0:
 		logger.info('No Results from CRLFuzz')
-		return
+		return []
 
 	crlfs = []
 	results = []
@@ -2915,12 +2976,12 @@ def http_crawl(
 	proxy = get_random_proxy()
 
 	# Run command
-	cmd += f' -cl -ct -rt -location -td -websocket -cname -asn -cdn -probe -random-agent'
+	cmd += f' -cl -ct -rt -location -td -websocket -cname -cdn -probe -random-agent'
 	cmd += f' -t {threads}' if threads > 0 else ''
 	cmd += f' --http-proxy {proxy}' if proxy else ''
 	formatted_headers = ' '.join(f'-H "{header}"' for header in custom_headers)
 	if formatted_headers:
-		cmd += formatted_headers
+		cmd += f' {formatted_headers}'
 	cmd += f' -json'
 	cmd += f' -u {urls[0]}' if len(urls) == 1 else f' -l {input_path}'
 	cmd += f' -x {method}' if method else ''

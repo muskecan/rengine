@@ -306,7 +306,7 @@
     version_lookup_command: crlfuzz -V
     update_command: go install -v github.com/dwisiswant0/crlfuzz/cmd/crlfuzz@latest
     install_command: go install -v github.com/dwisiswant0/crlfuzz/cmd/crlfuzz@latest
-    version_match_regex: '(\d+\.)?(\d+\.)?(\*|\d+)'
+    version_match_regex: 'gowitness:\s*(\d+\.)?(\d+\.)?(\*|\d+)'
     is_default: true
     is_subdomain_gathering: false
     is_github_cloned: false
@@ -343,6 +343,25 @@
     version_match_regex: (?i:v)?(\d+(?:\.\d+){2,})
     is_default: true
     is_subdomain_gathering: true
+    is_github_cloned: false
+    github_clone_path: null
+    subdomain_gathering_command: null
+- model: scanEngine.installedexternaltool
+  pk: 20
+  fields:
+    logo_url: https://raw.githubusercontent.com/sensepost/gowitness/master/logo.png
+    name: gowitness
+    description: A fast web screenshot utility using Chrome Headless. gowitness is
+      a website screenshot utility written in Golang, that uses Chrome Headless to
+      generate screenshots of web interfaces using the Chrome DevTools Protocol.
+    github_url: https://github.com/sensepost/gowitness
+    license_url: https://github.com/sensepost/gowitness/blob/master/LICENSE
+    version_lookup_command: gowitness version 2>&1 | head -1
+    update_command: go install -v github.com/sensepost/gowitness@latest
+    install_command: go install -v github.com/sensepost/gowitness@latest
+    version_match_regex: 'gowitness:\s*(\d+\.)?(\d+\.)?(\*|\d+)'
+    is_default: true
+    is_subdomain_gathering: false
     is_github_cloned: false
     github_clone_path: null
     subdomain_gathering_command: null

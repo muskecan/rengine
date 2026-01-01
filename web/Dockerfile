@@ -2,7 +2,7 @@
 FROM ubuntu:22.04
 
 ARG GECKOVERSION=0.33.0
-ARG GOVERSION=1.21.5
+ARG GOVERSION=1.25.5
 
 RUN ARCH=$(dpkg --print-architecture) \ 
     && if [ "${ARCH}" ! "arm64" ] || [ "${ARCH}" ! "amd64" ]; then \
@@ -97,9 +97,17 @@ RUN printf "\
     github.com/hahwul/dalfox/v2@latest\n\
     github.com/projectdiscovery/katana/cmd/katana@latest\n\
     github.com/dwisiswant0/crlfuzz/cmd/crlfuzz@latest\n\
-    github.com/sa7mon/s3scanner@latest\n" | \
+    github.com/sa7mon/s3scanner@latest\n\
+    github.com/sensepost/gowitness@latest\n" | \
     xargs -L1 go install -ldflags="-s -w" -v && \
     rm -rf /go/pkg/* && rm -rf /root/.cache/go-build
+
+# Install Chromium for gowitness (chromium-browser is a snap in Ubuntu 22.04, which doesn't work in Docker)
+# Using Playwright to download a compatible Chromium binary for both amd64 and arm64
+RUN apt-get install -y libnspr4 libnss3 libgbm1 \
+    && pip3 install playwright \
+    && playwright install chromium \
+    && ln -sf /root/.cache/ms-playwright/chromium-*/chrome-linux/chrome /usr/bin/chromium
 
 
 # Update Nuclei and Nuclei-Templates
@@ -113,12 +121,8 @@ COPY ./requirements.txt /tmp/requirements.txt
 RUN pip3 install --upgrade setuptools==72.1.0
 RUN pip3 install -r /tmp/requirements.txt --no-cache-dir
 
-# install eyewitness
-RUN pip3 install --no-cache-dir fuzzywuzzy \
-    selenium==4.9.1 \
-    python-Levenshtein \
-    pyvirtualdisplay \
-    netaddr
+# Additional Python packages
+RUN pip3 install --no-cache-dir netaddr
 
 # Copy source code
 COPY . /usr/src/app/

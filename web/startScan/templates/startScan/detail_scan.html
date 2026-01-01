@@ -36,8 +36,7 @@ Scan Findings
 <div class="row">
 	<div class="col-12">
 		<div class="card">
-			<div class="overflow-x-auto">
-			<ul class="nav nav-tabs nav-bordered m-1 flex-nowrap">
+				<ul class="nav nav-tabs nav-bordered m-1">
 				<li class="nav-item">
 					<a class="nav-link active" id="pills-summary-tab" data-bs-toggle="tab" aria-expanded="false" class="nav-link" href="#summary-tab">Home</a>
 				</li>
@@ -67,7 +66,7 @@ Scan Findings
 				{% endif %}
 				<li class="nav-item dropdown">
 					<a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#" role="button" aria-expanded="false">URLs&nbsp;<i class="fe-chevron-down"></i></a>
-					<ul class="dropdown-menu" style="width: 240px;">
+					<ul class="dropdown-menu" style="min-width: 240px; max-height: none;">
 						<li><a class="dropdown-item" id="pills-endpoints-tab" href="#endpoints-tab" data-bs-toggle="tab" aria-expanded="false">All Endpoints</a></li>
 						{% if 'fetch_url' in history.tasks and history.used_gf_patterns %}
 						{% for key,value in matched_gf_count.items %}
@@ -92,7 +91,6 @@ Scan Findings
 					<a class="nav-link" id="pills-visualisation-tab" data-bs-toggle="tab" aria-expanded="false" class="nav-link" href="#visualisation-tab">Visualization</a>
 				</li>
 			</ul>
-			</div>
 		</div>
 	</div>
 </div>

@@ -1536,16 +1536,18 @@ function get_target_whois(domain_name) {
 function get_domain_whois(domain_name, show_add_target_btn = false) {
 	const url = `/api/tools/whois/?format=json&target=${domain_name}`;
 	
-	Swal.fire({
-		title: `Fetching WHOIS details for ${domain_name}...`,
-		allowOutsideClick: false,
-		showConfirmButton: false,
-		willOpen: () => {
-			Swal.showLoading();
-		}
-	});
-
-	$('.modal').modal('hide');
+	// Show loading in the same modal
+	$('#modal_title').html('WHOIS Lookup');
+	$('#modal-content').html(`
+		<div class="text-center py-5">
+			<div class="spinner-border text-primary" role="status"></div>
+			<p class="mt-2 text-muted">Fetching WHOIS details for ${domain_name}...</p>
+		</div>
+	`);
+	
+	if (!$('#modal_dialog').hasClass('show')) {
+		$('#modal_dialog').modal('show');
+	}
 
 	fetch(url, {
 		method: 'GET',
@@ -1563,7 +1565,6 @@ function get_domain_whois(domain_name, show_add_target_btn = false) {
 	})
 	.then(data => {
 		console.log(data);
-		Swal.close();
 		if (data.status) {
 			display_whois_on_modal(data, show_add_target_btn);
 		} else {
@@ -1578,11 +1579,18 @@ function get_domain_whois(domain_name, show_add_target_btn = false) {
 		} else if (errorMessage.includes('Invalid domain')) {
 			errorMessage = 'Invalid domain or no WHOIS data available.';
 		}
-		Swal.fire({
-			title: 'Error!',
-			text: `Failed to fetch WHOIS records for ${domain_name}: ${errorMessage}`,
-			icon: 'error'
-		});
+		$('#modal-content').html(`
+			<div class="alert alert-danger" role="alert">
+				<i class="fe-alert-circle me-1"></i> ${errorMessage}
+			</div>
+			<div class="mb-3">
+				<label for="whois_domain_name" class="form-label">Domain Name/IP Address</label>
+				<input class="form-control" type="text" id="whois_domain_name" value="${domain_name}" placeholder="yourdomain.com">
+			</div>
+			<div class="mb-3 text-center">
+				<button class="btn btn-primary float-end" type="submit" id="search_whois_toolbox_btn">Search Whois</button>
+			</div>
+		`);
 	});
 }
 
@@ -1591,26 +1599,43 @@ function get_domain_whois(domain_name, show_add_target_btn = false) {
 function display_whois_on_modal(response, show_add_target_btn=false) {
 	console.log(response);
 	// this function will display whois data on modal, should be followed after get_domain_whois()
-	$('#modal_dialog').modal('show');
+	$('#modal_title').html(`WHOIS: ${response.target}`);
 	$('#modal-content').empty();
 	$("#modal-footer").empty();
 
-	content = `
-	<div class="row mt-3">
-		<div class="col-sm-3">
-			<div class="nav flex-column nav-pills nav-pills-tab" id="v-pills-tab" role="tablist" aria-orientation="vertical">
-				<a class="nav-link active show mb-1" id="v-pills-domain-tab" data-bs-toggle="pill" href="#v-pills-domain" role="tab" aria-controls="v-pills-domain-tab" aria-selected="true">Domain info</a>
-				<a class="nav-link mb-1" id="v-pills-whois-tab" data-bs-toggle="pill" href="#v-pills-whois" role="tab" aria-controls="v-pills-whois" aria-selected="false">Whois</a>
-				<a class="nav-link mb-1" id="v-pills-nameserver-tab" data-bs-toggle="pill" href="#v-pills-nameserver" role="tab" aria-controls="v-pills-nameserver" aria-selected="false">Nameservers</a>
-				<a class="nav-link mb-1" id="v-pills-dns-tab" data-bs-toggle="pill" href="#v-pills-dns" role="tab" aria-controls="v-pills-dns" aria-selected="false">DNS Records</a>
-				<a class="nav-link mb-1" id="v-pills-history-tab" data-bs-toggle="pill" href="#v-pills-history" role="tab" aria-controls="v-pills-history"aria-selected="false">Historical Ips</a>
-				<a class="nav-link mb-1" id="v-pills-related-tab" data-bs-toggle="pill" href="#v-pills-related" role="tab" aria-controls="v-pills-related" aria-selected="false">Related Domains</a>
-				<a class="nav-link mb-1" id="v-pills-similar-tab" data-bs-toggle="pill" href="#v-pills-similar" role="tab" aria-controls="v-pills-similar-tld" aria-selected="false">Related TLDs</a>
-			</div>
+	// Build search bar for new lookups
+	let searchBar = `
+		<div class="input-group mb-3">
+			<input class="form-control" type="text" id="whois_domain_name" value="${response.target}" placeholder="yourdomain.com">
+			<button class="btn btn-primary" type="button" id="search_whois_toolbox_btn">
+				<i class="fe-search"></i> Lookup
+			</button>
 		</div>
-		<div class="col-sm-9">
-			<div class="tab-content pt-0">
-			<div class="tab-pane fade active show" id="v-pills-domain" role="tabpanel" aria-labelledby="v-pills-domain-tab" data-simplebar style="min-height: 300px;">
+	`;
+
+	content = searchBar + `
+	<ul class="nav nav-tabs nav-bordered mb-3">
+		<li class="nav-item">
+			<a class="nav-link active" data-bs-toggle="tab" href="#whois-tab-domain">Domain Info</a>
+		</li>
+		<li class="nav-item">
+			<a class="nav-link" data-bs-toggle="tab" href="#whois-tab-contacts">Whois</a>
+		</li>
+		<li class="nav-item">
+			<a class="nav-link" data-bs-toggle="tab" href="#whois-tab-nameservers">Nameservers</a>
+		</li>
+		<li class="nav-item">
+			<a class="nav-link" data-bs-toggle="tab" href="#whois-tab-dns">DNS</a>
+		</li>
+		<li class="nav-item">
+			<a class="nav-link" data-bs-toggle="tab" href="#whois-tab-history">History</a>
+		</li>
+		<li class="nav-item">
+			<a class="nav-link" data-bs-toggle="tab" href="#whois-tab-related">Related</a>
+		</li>
+	</ul>
+	<div class="tab-content">
+		<div class="tab-pane fade active show" id="whois-tab-domain" data-simplebar style="max-height: 400px;">
 				<div class="row">
 					<div class="col-4">
 						<small class="sub-header">Domain</small>
@@ -1672,7 +1697,7 @@ function display_whois_on_modal(response, show_add_target_btn=false) {
 				}
 				content += `
 				</div>
-				<div class="tab-pane fade" id="v-pills-whois" role="tabpanel" aria-labelledby="v-pills-whois-tab">
+				<div class="tab-pane fade" id="whois-tab-contacts">
 					<ul class="nav nav-tabs nav-bordered nav-justified">
 						<li class="nav-item">
 							<a href="#registrant-tab" data-bs-toggle="tab" aria-expanded="false" class="nav-link active">
@@ -1815,7 +1840,7 @@ function display_whois_on_modal(response, show_add_target_btn=false) {
 				</div>`;
 
 				content += `
-				<div class="tab-pane fade" id="v-pills-dns" role="tabpanel" aria-labelledby="v-pills-dns-tab" data-simplebar style="min-height: 300px;">
+				<div class="tab-pane fade" id="whois-tab-dns" data-simplebar style="max-height: 400px;">
 					<h4>A Records</h4>`;
 					for (var a in response.dns.a) {
 						var a_object = response.dns.a[a];
@@ -1834,7 +1859,7 @@ function display_whois_on_modal(response, show_add_target_btn=false) {
 					}
 					content += `</div>`;
 
-					content += `<div class="tab-pane fade" id="v-pills-history" role="tabpanel" aria-labelledby="v-pills-history-tab" data-simplebar style="max-height: 300px; min-height: 300px;">
+					content += `<div class="tab-pane fade" id="whois-tab-history" data-simplebar style="max-height: 400px;">
 						<div class="alert alert-success">${response.historical_ips.length} Historical Ips</div>
 						<table id="basic-datatable" class="table dt-responsive w-100">
 							<thead>
@@ -1862,7 +1887,7 @@ function display_whois_on_modal(response, show_add_target_btn=false) {
 						</table>
 					</div>`;
 
-					content += `<div class="tab-pane fade" id="v-pills-nameserver" role="tabpanel" aria-labelledby="v-pills-nameserver-tab" data-simplebar style="max-height: 300px; min-height: 300px;">`;
+					content += `<div class="tab-pane fade" id="whois-tab-nameservers" data-simplebar style="max-height: 400px;">`;
 
 					content += `<div class="alert alert-success">${response.nameservers.length} NameServers identified</div>`;
 
@@ -1871,45 +1896,43 @@ function display_whois_on_modal(response, show_add_target_btn=false) {
 						content += `<span class="badge badge-soft-primary me-1 mt-1">${ns_object}</span>`;
 					}
 
-					content += `</div><div class="tab-pane fade" id="v-pills-similar" role="tabpanel" aria-labelledby="v-pills-similar-tab" data-simplebar style="max-height: 300px; min-height: 300px;">`;
+					content += `</div><div class="tab-pane fade" id="whois-tab-related" data-simplebar style="max-height: 400px;">
+					<h5 class="mb-2">Related TLDs</h5>`;
 
 					if (response.related_tlds.length > 0) {
 						for (var domain in response.related_tlds) {
 							var dom_object = response.related_tlds[domain];
-							content += `<span class="badge badge-soft-primary badge-link waves-effect waves-light me-1" data-toggle="tooltip" title="Add ${dom_object} as target." onclick="add_target('${dom_object}')">${dom_object}</span>`;
+							content += `<span class="badge badge-soft-primary badge-link waves-effect waves-light me-1 mb-1" data-toggle="tooltip" title="Add ${dom_object} as target." onclick="add_target('${dom_object}')">${dom_object}</span>`;
 						}
 					}
 					else{
-						content += `<div class="alert alert-info">No Related TLDs identified</div>`
+						content += `<p class="text-muted">No Related TLDs identified</p>`
 					}
-					content += `</div>`
-
-
-					content += `<div class="tab-pane fade" id="v-pills-related" role="tabpanel" aria-labelledby="v-pills-related-tab" data-simplebar style="max-height: 300px; min-height: 300px;">`;
+					
+					content += `<h5 class="mb-2 mt-3">Related Domains</h5>`;
 
 					if (response.related_domains.length > 0) {
 						for (var domain in response.related_domains) {
 							var dom_object = response.related_domains[domain];
-							content += `<span class="badge badge-soft-primary badge-link waves-effect waves-light me-1" data-toggle="tooltip" title="Add ${dom_object} as target." onclick="add_target('${dom_object}')">${dom_object}</span>`;
+							content += `<span class="badge badge-soft-primary badge-link waves-effect waves-light me-1 mb-1" data-toggle="tooltip" title="Add ${dom_object} as target." onclick="add_target('${dom_object}')">${dom_object}</span>`;
 						}
 					}
 					else{
-						content += `<div class="alert alert-info">No Related Domains identified</div>`
+						content += `<p class="text-muted">No Related Domains identified</p>`
 					}
 					content += `</div>`
 
-		content += `
-			</div>
-		</div>
-	</div>`;
+		content += `</div>`;
 
 	if (show_add_target_btn) {
-		content += `<div class="text-center">
-			<button class="btn btn-primary float-end mt-4" type="submit" id="search_whois_toolbox_btn" onclick="add_target('${response['target']}')">Add ${response['target']} as target</button>
+		content += `<div class="text-center mt-3">
+			<button class="btn btn-success" type="button" onclick="add_target('${response['target']}')">
+				<i class="fe-plus me-1"></i>Add ${response['target']} as target
+			</button>
 		</div>`
 	}
 
-	$('#modal-content').append(content);
+	$('#modal-content').html(content);
 	$('[data-toggle="tooltip"]').tooltip();
 
 }
@@ -2454,10 +2477,21 @@ function get_http_badge(http_status){
 
 function get_and_render_cve_details(cve_id){
 	var api_url = `/api/tools/cve_details/?cve_id=${cve_id}&format=json`;
-	Swal.fire({
-		title: 'Fetching CVE Details...'
-	});
-	swal.showLoading();
+	
+	// Show loading state in the same modal
+	$('#modal_title').html('CVE Details Lookup');
+	$('#modal-content').html(`
+		<div class="text-center py-5">
+			<div class="spinner-border text-primary" role="status"></div>
+			<p class="mt-2 text-muted">Fetching CVE Details...</p>
+		</div>
+	`);
+	
+	// Make sure modal is open (it might be called from vulnerability badges too)
+	if (!$('#modal_dialog').hasClass('show')) {
+		$('#modal_dialog').modal('show');
+	}
+	
 	fetch(api_url, {
 		method: 'GET',
 		credentials: "same-origin",
@@ -2467,12 +2501,8 @@ function get_and_render_cve_details(cve_id){
 		},
 	}).then(response => response.json()).then(function(response) {
 		console.log(response);
-		swal.close();
 		if (response.status) {
-			$('#xl-modal-title').empty();
-			$('#xl-modal-content').empty();
-			$('#xl-modal-footer').empty();
-			$('#xl-modal_title').html(`CVE Details of ${cve_id}`);
+			$('#modal_title').html(`CVE Details: ${cve_id}`);
 
 			var cvss_score_badge = 'danger';
 
@@ -2483,105 +2513,154 @@ function get_and_render_cve_details(cve_id){
 				cvss_score_badge = 'warning';
 			}
 
-			content = `<div class="row mt-3">
-				<div class="col-sm-3">
-				<div class="nav flex-column nav-pills nav-pills-tab" id="v-pills-tab" role="tablist" aria-orientation="vertical">
-				<a class="nav-link active show mb-1" id="v-pills-cve-details-tab" data-bs-toggle="pill" href="#v-pills-cve-details" role="tab" aria-controls="v-pills-cve-details-tab" aria-selected="true">CVE Details</a>
-				<a class="nav-link mb-1" id="v-pills-affected-products-tab" data-bs-toggle="pill" href="#v-pills-affected-products" role="tab" aria-controls="v-pills-affected-products-tab" aria-selected="true">Affected Products</a>
-				<a class="nav-link mb-1" id="v-pills-affected-versions-tab" data-bs-toggle="pill" href="#v-pills-affected-versions" role="tab" aria-controls="v-pills-affected-versions-tab" aria-selected="true">Affected Versions</a>
-				<a class="nav-link mb-1" id="v-pills-cve-references-tab" data-bs-toggle="pill" href="#v-pills-cve-references" role="tab" aria-controls="v-pills-cve-references-tab" aria-selected="true">References</a>
+			// Build search bar for new lookups
+			let searchBar = `
+				<div class="input-group mb-3">
+					<input class="form-control" type="text" id="cve_id" value="${cve_id}" placeholder="CVE-XXXX-XXXX">
+					<button class="btn btn-primary" type="button" id="cve_detail_submit_btn">
+						<i class="fe-search"></i> Lookup
+					</button>
 				</div>
-				</div>
-				<div class="col-sm-9">
-				<div class="tab-content pt-0">`;
+			`;
 
-				content += `
-				<div class="tab-pane fade active show" id="v-pills-cve-details" role="tabpanel" aria-labelledby="v-pills-cve-details-tab" data-simplebar style="max-height: 600px; min-height: 600px;">
-					<h4 class="header-title">${cve_id}</h4>
+			// Build tabs for navigation
+			let content = searchBar + `
+				<ul class="nav nav-tabs nav-bordered mb-3">
+					<li class="nav-item">
+						<a class="nav-link active" data-bs-toggle="tab" href="#cve-tab-details">Details</a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link" data-bs-toggle="tab" href="#cve-tab-products">Affected Products</a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link" data-bs-toggle="tab" href="#cve-tab-versions">Affected Versions</a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link" data-bs-toggle="tab" href="#cve-tab-references">References</a>
+					</li>
+				</ul>
+				<div class="tab-content">
+			`;
+
+			// CVE Details Tab
+			content += `
+				<div class="tab-pane fade show active" id="cve-tab-details" data-simplebar style="max-height: 400px;">
 					<div class="alert alert-warning" role="alert">
-						${response.result.summary}
+						${response.result.summary || 'No description available.'}
 					</div>
-					<span class="badge badge-soft-primary">Assigner: ${response.result.assigner}</span>
-					<span class="badge badge-outline-primary">CVSS Vector: ${response.result['cvss-vector']}</span>
-					<table class="domain_details_table table table-hover table-borderless">
-						<tr style="display: none">
-							<th>&nbsp;</th>
-							<th>&nbsp;</th>
-						</tr>
-						<tr>
-							<td>CVSS Score</td>
-							<td><span class="badge badge-soft-${cvss_score_badge}">${response.result.cvss ? response.result.cvss: "-"}</span></td>
-						</tr>
-						<tr>
-							<td>Confidentiality Impact</td>
-							<td>${response.result.impact.confidentiality ? response.result.impact.confidentiality: "N/A"}</td>
-						</tr>
-						<tr>
-							<td>Integrity Impact</td>
-							<td>${response.result.impact.integrity ? response.result.impact.integrity: "N/A"}</td>
-						</tr>
-						<tr>
-							<td>Availability Impact</td>
-							<td>${response.result.impact.availability ? response.result.impact.availability: "N/A"}</td>
-						</tr>
-						<tr>
-							<td>Access Complexity</td>
-							<td>${response.result.access.complexity ? response.result.access.complexity: "N/A"}</td>
-						</tr>
-						<tr>
-							<td>Authentication</td>
-							<td>${response.result.access.authentication ? response.result.access.authentication: "N/A"}</td>
-						</tr>
-						<tr>
-							<td>CWE ID</td>
-							<td><span class="badge badge-outline-danger">${response.result.cwe ? response.result.cwe: "N/A"}</span></td>
-						</tr>
+					<div class="mb-2">
+						<span class="badge badge-soft-primary">Assigner: ${response.result.assigner || 'N/A'}</span>
+						<span class="badge badge-outline-primary ms-1">CVSS Vector: ${response.result['cvss-vector'] || 'N/A'}</span>
+					</div>
+					<table class="table table-sm table-borderless">
+						<tbody>
+							<tr>
+								<td class="fw-bold" style="width: 180px;">CVSS Score</td>
+								<td><span class="badge badge-soft-${cvss_score_badge}">${response.result.cvss ? response.result.cvss : "-"}</span></td>
+							</tr>
+							<tr>
+								<td class="fw-bold">Confidentiality Impact</td>
+								<td>${response.result.impact.confidentiality || "N/A"}</td>
+							</tr>
+							<tr>
+								<td class="fw-bold">Integrity Impact</td>
+								<td>${response.result.impact.integrity || "N/A"}</td>
+							</tr>
+							<tr>
+								<td class="fw-bold">Availability Impact</td>
+								<td>${response.result.impact.availability || "N/A"}</td>
+							</tr>
+							<tr>
+								<td class="fw-bold">Access Complexity</td>
+								<td>${response.result.access.complexity || "N/A"}</td>
+							</tr>
+							<tr>
+								<td class="fw-bold">Authentication</td>
+								<td>${response.result.access.authentication || "N/A"}</td>
+							</tr>
+							<tr>
+								<td class="fw-bold">CWE ID</td>
+								<td><span class="badge badge-outline-danger">${response.result.cwe || "N/A"}</span></td>
+							</tr>
+						</tbody>
 					</table>
 				</div>
-				`;
+			`;
 
-				content += `<div class="tab-pane fade" id="v-pills-cve-references" role="tabpanel" aria-labelledby="v-pills-cve-references-tab" data-simplebar style="max-height: 600px; min-height: 600px;">
-				<ul>`;
-
-				for (var reference in response.result.references) {
-					content += `<li><a href="${response.result.references[reference]}" target="_blank">${response.result.references[reference]}</a></li>`;
+			// Affected Products Tab
+			content += `<div class="tab-pane fade" id="cve-tab-products" data-simplebar style="max-height: 400px;">`;
+			if (response.result.vulnerable_product && response.result.vulnerable_product.length > 0) {
+				content += `<ul class="list-group list-group-flush">`;
+				for (var prod of response.result.vulnerable_product) {
+					content += `<li class="list-group-item">${prod}</li>`;
 				}
+				content += `</ul>`;
+			} else {
+				content += `<p class="text-muted">No affected products listed.</p>`;
+			}
+			content += `</div>`;
 
-				content += `</ul></div>`;
-
-
-				content += `<div class="tab-pane fade" id="v-pills-affected-products" role="tabpanel" aria-labelledby="v-pills-affected-products-tab" data-simplebar style="max-height: 600px; min-height: 600px;">
-				<ul>`;
-
-				for (var prod in response.result.vulnerable_product) {
-					content += `<li>${response.result.vulnerable_product[prod]}</li>`;
+			// Affected Versions Tab
+			content += `<div class="tab-pane fade" id="cve-tab-versions" data-simplebar style="max-height: 400px;">`;
+			if (response.result.vulnerable_configuration && response.result.vulnerable_configuration.length > 0) {
+				content += `<ul class="list-group list-group-flush">`;
+				for (var conf of response.result.vulnerable_configuration) {
+					content += `<li class="list-group-item">${conf.id || conf}</li>`;
 				}
+				content += `</ul>`;
+			} else {
+				content += `<p class="text-muted">No affected versions listed.</p>`;
+			}
+			content += `</div>`;
 
-				content += `</ul></div>`;
-
-				content += `<div class="tab-pane fade" id="v-pills-affected-versions" role="tabpanel" aria-labelledby="v-pills-affected-versions-tab" data-simplebar style="max-height: 600px; min-height: 600px;">
-				<ul>`;
-
-				for (var conf in response.result.vulnerable_configuration) {
-					content += `<li>${response.result.vulnerable_configuration[conf]['id']}</li>`;
+			// References Tab
+			content += `<div class="tab-pane fade" id="cve-tab-references" data-simplebar style="max-height: 400px;">`;
+			if (response.result.references && response.result.references.length > 0) {
+				content += `<ul class="list-group list-group-flush">`;
+				for (var reference of response.result.references) {
+					content += `<li class="list-group-item"><a href="${reference}" target="_blank" rel="noopener">${reference}</a></li>`;
 				}
+				content += `</ul>`;
+			} else {
+				content += `<p class="text-muted">No references available.</p>`;
+			}
+			content += `</div>`;
 
-				content += `</ul></div>`;
+			content += `</div>`; // Close tab-content
 
-				content += `</div></div></div>`;
-
-			$('#xl-modal-content').append(content);
-
-			$('#modal_xl_scroll_dialog').modal('show');
+			$('#modal-content').html(content);
+			
 			$("body").tooltip({
 				selector: '[data-toggle=tooltip]'
 			});
 		}
 		else{
-			swal.fire("Error!", response.message, "error", {
-				button: "Okay",
-			});
+			$('#modal-content').html(`
+				<div class="alert alert-danger" role="alert">
+					<i class="fe-alert-circle me-1"></i> ${response.message || 'Error fetching CVE details'}
+				</div>
+				<div class="mb-1">
+					<label for="cve_id" class="form-label">CVE ID</label>
+					<input class="form-control" type="text" id="cve_id" value="${cve_id}" placeholder="CVE-XXXX-XXXX">
+				</div>
+				<div class="mt-3 mb-3 text-center">
+					<button class="btn btn-primary float-end" type="submit" id="cve_detail_submit_btn">Lookup CVE</button>
+				</div>
+			`);
 		}
+	}).catch(function(error) {
+		$('#modal-content').html(`
+			<div class="alert alert-danger" role="alert">
+				<i class="fe-alert-circle me-1"></i> Error: ${error.message || 'Failed to fetch CVE details'}
+			</div>
+			<div class="mb-1">
+				<label for="cve_id" class="form-label">CVE ID</label>
+				<input class="form-control" type="text" id="cve_id" value="${cve_id}" placeholder="CVE-XXXX-XXXX">
+			</div>
+			<div class="mt-3 mb-3 text-center">
+				<button class="btn btn-primary float-end" type="submit" id="cve_detail_submit_btn">Lookup CVE</button>
+			</div>
+		`);
 	});
 }
 
