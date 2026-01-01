@@ -188,7 +188,8 @@ def profile(request, slug):
     else:
         form = PasswordChangeForm(request.user)
     return render(request, 'dashboard/profile.html', {
-        'form': form
+        'form': form,
+        'user_preferences': getattr(request, 'user_preferences', None),
     })
 
 
@@ -339,6 +340,8 @@ def onboarding(request):
         key_hackerone = request.POST.get('key_hackerone')
         username_hackerone = request.POST.get('username_hackerone')
         bug_bounty_mode = request.POST.get('bug_bounty_mode') == 'on'
+        ntfy_enabled = request.POST.get('ntfy_enabled') == 'on'
+        ntfy_include_domain = request.POST.get('ntfy_include_domain') == 'on'
 
         insert_date = timezone.now()
 
@@ -352,9 +355,11 @@ def onboarding(request):
             error = ' Could not create project, Error: ' + str(e)
 
 
-        # update currently logged in user's preferences for bug bounty mode
+        # update currently logged in user's preferences
         user_preferences, _ = UserPreferences.objects.get_or_create(user=request.user)
         user_preferences.bug_bounty_mode = bug_bounty_mode
+        user_preferences.ntfy_enabled = ntfy_enabled
+        user_preferences.ntfy_include_domain = ntfy_include_domain
         user_preferences.save()
 
 

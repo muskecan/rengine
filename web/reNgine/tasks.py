@@ -32,6 +32,7 @@ from reNgine.definitions import *
 from reNgine.settings import *
 from reNgine.llm import *
 from reNgine.utilities import *
+from dashboard.models import UserPreferences
 from scanEngine.models import (EngineType, InstalledExternalTool, Notification, Proxy)
 from startScan.models import *
 from startScan.models import EndPoint, Subdomain, Vulnerability
@@ -3229,6 +3230,50 @@ def send_scan_notif(
 			scan_history_id,
 			subscan_id,
 			**opts)
+	
+	# Send ntfy push notification if enabled for this scan
+	if scan and scan.ntfy_enabled and scan.initiated_by:
+		try:
+			user_prefs = UserPreferences.objects.filter(user=scan.initiated_by).first()
+			if user_prefs and user_prefs.ntfy_enabled and user_prefs.ntfy_topic:
+				# Build privacy-aware message
+				scan_type = "Subscan" if subscan else "Scan"
+				domain_name = scan.domain.name
+				
+				if user_prefs.ntfy_include_domain:
+					# Privacy OFF - include domain name
+					ntfy_title = f"{domain_name} {scan_type}"
+					ntfy_msg = f"{domain_name} {scan_type.lower()} {status.lower()}"
+				else:
+					# Privacy ON (default) - no domain name
+					ntfy_title = f"{scan_type} #{scan.id}"
+					ntfy_msg = f"{scan_type} #{scan.id} {status.lower()}"
+				
+				# Add details based on status
+				if status == 'SUCCESS' and fields.get('Duration'):
+					ntfy_msg += f" - completed in {fields.get('Duration')}"
+				elif status == 'FAILED':
+					ntfy_msg += " - check logs for details"
+				
+				# Map status to ntfy priority and tags
+				status_config = {
+					'RUNNING': {'priority': 'default', 'tags': 'arrow_forward'},
+					'SUCCESS': {'priority': 'default', 'tags': 'white_check_mark'},
+					'FAILED': {'priority': 'high', 'tags': 'x'},
+					'ABORTED': {'priority': 'default', 'tags': 'stop_sign'},
+				}
+				config = status_config.get(status, {'priority': 'default', 'tags': ''})
+				
+				send_ntfy_message(
+					message=ntfy_msg,
+					topic=user_prefs.ntfy_topic,
+					title=ntfy_title,
+					priority=config['priority'],
+					tags=config['tags']
+				)
+				logger.info(f'Sent ntfy notification for scan {scan.id} to topic {user_prefs.ntfy_topic}')
+		except Exception as e:
+			logger.error(f'Failed to send ntfy notification: {e}')
 	
 def generate_inapp_notification(scan, subscan, status, engine, fields):
 	scan_type = "Subscan" if subscan else "Scan"

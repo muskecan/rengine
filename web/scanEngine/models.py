@@ -73,12 +73,14 @@ class Notification(models.Model):
     send_to_lark = models.BooleanField(default=False)
     send_to_discord = models.BooleanField(default=False)
     send_to_telegram = models.BooleanField(default=False)
+    send_to_ntfy = models.BooleanField(default=False)
 
     slack_hook_url = models.CharField(max_length=200, null=True, blank=True)
     lark_hook_url = models.CharField(max_length=200, null=True, blank=True)
     discord_hook_url = models.CharField(max_length=200, null=True, blank=True)
     telegram_bot_token = models.CharField(max_length=100, null=True, blank=True)
     telegram_bot_chat_id = models.CharField(max_length=100, null=True, blank=True)
+    ntfy_server_url = models.CharField(max_length=200, default='https://ntfy.sh', blank=True)
 
     send_scan_status_notif = models.BooleanField(default=True)
     send_interesting_notif = models.BooleanField(default=True)

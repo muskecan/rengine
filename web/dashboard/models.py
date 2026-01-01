@@ -92,6 +92,10 @@ class InAppNotification(models.Model):
 class UserPreferences(models.Model):
 	user = models.OneToOneField(User, on_delete=models.CASCADE)
 	bug_bounty_mode = models.BooleanField(default=True)
+	# ntfy push notification settings
+	ntfy_topic = models.CharField(max_length=100, unique=True, blank=True, null=True)
+	ntfy_enabled = models.BooleanField(default=False)
+	ntfy_include_domain = models.BooleanField(default=False)  # Privacy: False = no domain in notifications
 	
 	def __str__(self):
 		return f"{self.user.username}'s preferences"

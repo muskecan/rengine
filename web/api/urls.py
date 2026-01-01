@@ -246,6 +246,11 @@ urlpatterns = [
         ToggleBugBountyModeView.as_view(), 
         name='toggle_bug_bounty_mode'
     ),
+    path(
+        'user/ntfy-preferences/',
+        NtfyPreferencesView.as_view(),
+        name='ntfy_preferences'
+    ),
 ]
 
 urlpatterns += router.urls

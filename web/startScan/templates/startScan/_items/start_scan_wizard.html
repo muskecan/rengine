@@ -92,6 +92,26 @@
               </small>
             </div>
           </div>
+          
+          <h4>Notifications</h4>
+          <div class="mb-4">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="ntfy_enabled" name="ntfy_enabled">
+              <label class="form-check-label" for="ntfy_enabled">
+                <i class="mdi mdi-bell-outline me-1"></i>
+                <strong>Enable push notifications for this scan</strong>
+              </label>
+            </div>
+            <small class="form-text text-muted">
+              Receive real-time push notifications via ntfy when this scan starts, completes, or fails.
+              {% if user_preferences and user_preferences.ntfy_enabled %}
+              <span class="text-success"><i class="mdi mdi-check-circle"></i> You have ntfy notifications enabled in your preferences.</span>
+              {% else %}
+              <span class="text-warning"><i class="mdi mdi-alert"></i> Enable ntfy in your <a href="{% url 'onboarding' %}">preferences</a> to receive notifications.</span>
+              {% endif %}
+            </small>
+          </div>
+
           {% if domain_ids %}
           <input type="hidden" name="domain_ids" value="{{domain_ids}}">
           {% endif %}

@@ -110,6 +110,45 @@
               </div>
               <div class="card mb-4">
                 <div class="card-body">
+                  <h5 class="card-title"><i class="fe-bell text-primary me-2"></i>Push Notifications (ntfy)</h5>
+                  <p class="card-text text-muted">Receive push notifications on your phone or desktop via ntfy.</p>
+                  <div class="mb-3">
+                    <label for="ntfy_topic" class="form-label">Your ntfy Topic</label>
+                    <div class="input-group">
+                      <input class="form-control" type="text" id="ntfy_topic" name="ntfy_topic" value="{{ user_preferences.ntfy_topic }}" readonly>
+                      <button class="btn btn-outline-secondary" type="button" onclick="copyNtfyTopic()">
+                        <i class="fe-copy"></i> Copy
+                      </button>
+                    </div>
+                    <small class="text-muted">Subscribe to this topic in your <a href="https://ntfy.sh" target="_blank">ntfy app</a> to receive notifications.</small>
+                  </div>
+                  <div class="mb-3">
+                    <div class="form-check form-switch">
+                      <label class="form-check-label" for="ntfy_enabled">
+                        <i class="fe-bell text-primary me-2"></i>
+                        <span class="fw-bold">Enable ntfy Notifications</span>
+                      </label>
+                      <input class="form-check-input" type="checkbox" id="ntfy_enabled" name="ntfy_enabled" {% if user_preferences.ntfy_enabled %}checked{% endif %}>
+                    </div>
+                    <small class="text-muted d-block mt-2">Enable to receive scan status notifications via ntfy push notifications.</small>
+                  </div>
+                  <div class="mb-3">
+                    <div class="form-check form-switch">
+                      <label class="form-check-label" for="ntfy_include_domain">
+                        <i class="fe-eye text-warning me-2"></i>
+                        <span class="fw-bold">Include Domain Name in Notifications</span>
+                      </label>
+                      <input class="form-check-input" type="checkbox" id="ntfy_include_domain" name="ntfy_include_domain" {% if user_preferences.ntfy_include_domain %}checked{% endif %}>
+                    </div>
+                    <small class="text-muted d-block mt-2">
+                      <strong>Privacy setting:</strong> By default, notifications only show "Scan #123 started" without domain names.
+                      Enable this to include the actual domain name in notifications (e.g., "example.com scan started").
+                    </small>
+                  </div>
+                </div>
+              </div>
+              <div class="card mb-4">
+                <div class="card-body">
                   <h5 class="card-title"><i class="fe-key text-primary me-2"></i>API Keys</h5>
                   <p class="card-text text-muted">Enter your API keys for various services to enhance reNgine's capabilities.</p>
                   <div class="mb-3">
@@ -147,5 +186,25 @@
       </div>
     </div>
     <script src="{% static 'assets/js/vendor.min.js' %}"></script>
+    <script>
+    function copyNtfyTopic() {
+      var topicInput = document.getElementById('ntfy_topic');
+      topicInput.select();
+      topicInput.setSelectionRange(0, 99999);
+      navigator.clipboard.writeText(topicInput.value);
+      
+      // Show feedback
+      var btn = event.target.closest('button');
+      var originalHtml = btn.innerHTML;
+      btn.innerHTML = '<i class="fe-check"></i> Copied!';
+      btn.classList.remove('btn-outline-secondary');
+      btn.classList.add('btn-success');
+      setTimeout(function() {
+        btn.innerHTML = originalHtml;
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-outline-secondary');
+      }, 2000);
+    }
+    </script>
   </body>
 </html>

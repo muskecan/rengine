@@ -268,6 +268,9 @@ def start_scan_ui(request, slug, domain_id):
 
         # Get engine type
         engine_id = request.POST['scan_mode']
+        
+        # Get ntfy notification preference for this scan
+        ntfy_enabled = request.POST.get('ntfy_enabled') == 'on'
 
         # Create ScanHistory object
         scan_history_id = create_scan_object(
@@ -276,6 +279,8 @@ def start_scan_ui(request, slug, domain_id):
             initiated_by_id=request.user.id
         )
         scan = ScanHistory.objects.get(pk=scan_history_id)
+        scan.ntfy_enabled = ntfy_enabled
+        scan.save()
 
         # Start the celery task
         kwargs = {
@@ -291,7 +296,6 @@ def start_scan_ui(request, slug, domain_id):
             'initiated_by_id': request.user.id
         }
         initiate_scan.apply_async(kwargs=kwargs)
-        scan.save()
 
         # Send start notif
         messages.add_message(
@@ -339,6 +343,7 @@ def start_scan_ui(request, slug, domain_id):
         'subdomains_out': subdomains_out,
         'starting_point_path': starting_point_path,
         'selected_engine_id': selected_engine_id,
+        'user_preferences': getattr(request, 'user_preferences', None),
     }
     return render(request, 'startScan/start_scan_ui.html', context)
 
@@ -785,6 +790,7 @@ def start_organization_scan(request, id, slug):
     organization = get_object_or_404(Organization, id=id)
     if request.method == "POST":
         engine_id = request.POST['scan_mode']
+        ntfy_enabled = request.POST.get('ntfy_enabled') == 'on'
 
         subdomains_in = request.POST['importSubdomainTextArea'].split()
         subdomains_in = [s.rstrip() for s in subdomains_in if s]
@@ -803,6 +809,8 @@ def start_organization_scan(request, id, slug):
                 initiated_by_id=request.user.id
             )
             scan = ScanHistory.objects.get(pk=scan_history_id)
+            scan.ntfy_enabled = ntfy_enabled
+            scan.save()
 
             kwargs = {
                 'scan_history_id': scan.id,
@@ -817,7 +825,6 @@ def start_organization_scan(request, id, slug):
                 'excluded_paths': excluded_paths,
             }
             initiate_scan.apply_async(kwargs=kwargs)
-            scan.save()
 
 
         # Send start notif

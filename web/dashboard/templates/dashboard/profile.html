@@ -65,8 +65,117 @@ My Profile
     </div>
   </div>
 </div>
+
+<div class="row mt-3">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-body">
+        <h4><i class="mdi mdi-bell-outline me-2"></i>Push Notifications (ntfy)</h4>
+        <p class="text-muted">Receive real-time push notifications on your phone or desktop via ntfy.</p>
+        
+        <div class="row">
+          <div class="col-md-6">
+            <div class="mb-3">
+              <label for="ntfy_topic" class="form-label">Your ntfy Topic</label>
+              <div class="input-group">
+                <input type="text" class="form-control" id="ntfy_topic" value="{{ user_preferences.ntfy_topic }}" readonly>
+                <button class="btn btn-outline-secondary" type="button" onclick="copyNtfyTopic()">
+                  <i class="mdi mdi-content-copy"></i> Copy
+                </button>
+              </div>
+              <small class="text-muted">Subscribe to this topic in the <a href="https://ntfy.sh" target="_blank">ntfy app</a> to receive notifications.</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="row mt-3">
+          <div class="col-12">
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" id="ntfy_enabled" {% if user_preferences.ntfy_enabled %}checked{% endif %}>
+              <label class="form-check-label" for="ntfy_enabled">
+                <strong>Enable ntfy Notifications</strong>
+              </label>
+              <br>
+              <small class="text-muted">Receive scan status notifications via ntfy push notifications.</small>
+            </div>
+            
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" id="ntfy_include_domain" {% if user_preferences.ntfy_include_domain %}checked{% endif %}>
+              <label class="form-check-label" for="ntfy_include_domain">
+                <strong>Include Domain Name in Notifications</strong>
+                <span class="badge bg-soft-warning text-warning ms-2">Privacy</span>
+              </label>
+              <br>
+              <small class="text-muted">
+                By default, notifications show "Scan #123 started" without domain names. 
+                Enable this to see "example.com scan started" instead.
+              </small>
+            </div>
+
+            <button class="btn btn-primary" onclick="saveNtfyPreferences()">
+              <i class="mdi mdi-content-save"></i> Save Preferences
+            </button>
+            <span id="ntfy_save_status" class="ms-2"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock main_content %}
 
 
 {% block page_level_script %}
+<script>
+function copyNtfyTopic() {
+  var topicInput = document.getElementById('ntfy_topic');
+  topicInput.select();
+  topicInput.setSelectionRange(0, 99999);
+  navigator.clipboard.writeText(topicInput.value);
+  
+  // Show feedback
+  var btn = event.target.closest('button');
+  var originalHtml = btn.innerHTML;
+  btn.innerHTML = '<i class="mdi mdi-check"></i> Copied!';
+  btn.classList.remove('btn-outline-secondary');
+  btn.classList.add('btn-success');
+  setTimeout(function() {
+    btn.innerHTML = originalHtml;
+    btn.classList.remove('btn-success');
+    btn.classList.add('btn-outline-secondary');
+  }, 2000);
+}
+
+function saveNtfyPreferences() {
+  var ntfyEnabled = document.getElementById('ntfy_enabled').checked;
+  var ntfyIncludeDomain = document.getElementById('ntfy_include_domain').checked;
+  var statusEl = document.getElementById('ntfy_save_status');
+  
+  fetch('/api/user/ntfy-preferences/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': '{{ csrf_token }}'
+    },
+    body: JSON.stringify({
+      ntfy_enabled: ntfyEnabled,
+      ntfy_include_domain: ntfyIncludeDomain
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.error) {
+      statusEl.innerHTML = '<span class="text-danger"><i class="mdi mdi-alert-circle"></i> ' + data.error + '</span>';
+    } else {
+      statusEl.innerHTML = '<span class="text-success"><i class="mdi mdi-check-circle"></i> Saved!</span>';
+      setTimeout(function() {
+        statusEl.innerHTML = '';
+      }, 3000);
+    }
+  })
+  .catch(error => {
+    statusEl.innerHTML = '<span class="text-danger"><i class="mdi mdi-alert-circle"></i> Error saving preferences</span>';
+  });
+}
+</script>
 {% endblock page_level_script %}

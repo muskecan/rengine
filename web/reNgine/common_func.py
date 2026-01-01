@@ -633,6 +633,42 @@ def send_lark_message(message):
 	hook_url = notif.lark_hook_url
 	requests.post(url=hook_url, data=json.dumps(message), headers=headers)
 
+
+def send_ntfy_message(message, topic, title=None, priority=None, tags=None):
+	"""Send ntfy push notification.
+
+	Args:
+		message (str): Message body.
+		topic (str): The ntfy topic to publish to.
+		title (str, optional): Notification title.
+		priority (str, optional): Priority level (min, low, default, high, urgent).
+		tags (str, optional): Comma-separated emoji tags (e.g., 'warning,skull').
+	"""
+	notif = Notification.objects.first()
+	do_send = (
+		notif and
+		notif.send_to_ntfy and
+		topic)
+	if not do_send:
+		return
+	
+	server_url = notif.ntfy_server_url or 'https://ntfy.sh'
+	url = f"{server_url.rstrip('/')}/{topic}"
+	
+	headers = {'Content-Type': 'text/plain; charset=utf-8'}
+	if title:
+		headers['Title'] = title
+	if priority:
+		headers['Priority'] = priority
+	if tags:
+		headers['Tags'] = tags
+	
+	try:
+		requests.post(url, data=message.encode('utf-8'), headers=headers, timeout=10)
+	except Exception as e:
+		logger.error(f'Failed to send ntfy notification: {e}')
+
+
 def send_discord_message(
 		message,
 		title='',

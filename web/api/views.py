@@ -53,6 +53,47 @@ class ToggleBugBountyModeView(APIView):
 		}, status=status.HTTP_200_OK)
 
 
+class NtfyPreferencesView(APIView):
+	"""
+		This class manages user ntfy push notification preferences
+	"""
+	def get(self, request, *args, **kwargs):
+		"""Get current ntfy preferences"""
+		user_preferences = get_object_or_404(UserPreferences, user=request.user)
+		return Response({
+			'ntfy_topic': user_preferences.ntfy_topic,
+			'ntfy_enabled': user_preferences.ntfy_enabled,
+			'ntfy_include_domain': user_preferences.ntfy_include_domain,
+		}, status=status.HTTP_200_OK)
+	
+	def post(self, request, *args, **kwargs):
+		"""Update ntfy preferences"""
+		user_preferences = get_object_or_404(UserPreferences, user=request.user)
+		
+		# Update fields if provided
+		if 'ntfy_enabled' in request.data:
+			user_preferences.ntfy_enabled = request.data.get('ntfy_enabled', False)
+		if 'ntfy_include_domain' in request.data:
+			user_preferences.ntfy_include_domain = request.data.get('ntfy_include_domain', False)
+		if 'ntfy_topic' in request.data:
+			new_topic = request.data.get('ntfy_topic', '').strip()
+			if new_topic:
+				# Check for uniqueness
+				existing = UserPreferences.objects.filter(ntfy_topic=new_topic).exclude(user=request.user).exists()
+				if existing:
+					return Response({
+						'error': 'This topic is already in use by another user'
+					}, status=status.HTTP_400_BAD_REQUEST)
+				user_preferences.ntfy_topic = new_topic
+		
+		user_preferences.save()
+		return Response({
+			'ntfy_topic': user_preferences.ntfy_topic,
+			'ntfy_enabled': user_preferences.ntfy_enabled,
+			'ntfy_include_domain': user_preferences.ntfy_include_domain,
+		}, status=status.HTTP_200_OK)
+
+
 class HackerOneProgramViewSet(viewsets.ViewSet):
 	"""
 		This class manages the HackerOne Program model, 
