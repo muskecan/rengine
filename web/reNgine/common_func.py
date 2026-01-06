@@ -13,6 +13,7 @@ import requests
 import tldextract
 import xmltodict
 
+from datetime import datetime
 from time import sleep
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
@@ -667,6 +668,70 @@ def send_ntfy_message(message, topic, title=None, priority=None, tags=None):
 		requests.post(url, data=message.encode('utf-8'), headers=headers, timeout=10)
 	except Exception as e:
 		logger.error(f'Failed to send ntfy notification: {e}')
+
+
+def send_batch_scan_notif(scan_ids, user, engine_name=None, status='STARTED'):
+	"""Send batch notification for multiple scans starting at once.
+
+	Args:
+		scan_ids (list): List of ScanHistory IDs.
+		user: The user who initiated the scans.
+		engine_name (str, optional): Name of the scan engine used.
+		status (str): Notification status (default: 'STARTED').
+	"""
+	if not scan_ids:
+		return
+	
+	scan_count = len(scan_ids)
+	scans = ScanHistory.objects.filter(pk__in=scan_ids).select_related('domain')
+	domain_names = [scan.domain.name for scan in scans if scan.domain]
+	
+	# Get user preferences for privacy setting
+	user_prefs = UserPreferences.objects.filter(user=user).first() if user else None
+	include_domains = user_prefs.ntfy_include_domain if user_prefs else False
+	
+	# Build message based on privacy setting
+	engine_str = f" with {engine_name}" if engine_name else ""
+	if include_domains and domain_names:
+		if scan_count <= 3:
+			domains_str = ", ".join(domain_names)
+		else:
+			domains_str = ", ".join(domain_names[:3]) + f"... (+{scan_count - 3} more)"
+		ntfy_msg = f"Scans started: {domains_str}{engine_str}"
+		ntfy_title = f"Batch Scan Started ({scan_count} targets)"
+	else:
+		ntfy_msg = f"{scan_count} scan{'s' if scan_count > 1 else ''} started{engine_str}"
+		ntfy_title = f"Batch Scan Started"
+	
+	# Send ntfy notification if enabled
+	if user_prefs and user_prefs.ntfy_enabled and user_prefs.ntfy_topic:
+		# Check if any of the scans have ntfy_enabled
+		ntfy_enabled_scans = scans.filter(ntfy_enabled=True).exists()
+		if ntfy_enabled_scans:
+			send_ntfy_message(
+				ntfy_msg,
+				user_prefs.ntfy_topic,
+				title=ntfy_title,
+				priority='default',
+				tags='rocket'
+			)
+	
+	# Generate in-app notification
+	from dashboard.models import InAppNotification
+	notif_title = f"Batch scan started: {scan_count} target{'s' if scan_count > 1 else ''}"
+	notif_desc = f"Started scanning {', '.join(domain_names[:5])}" if domain_names else f"Started {scan_count} scans"
+	if len(domain_names) > 5:
+		notif_desc += f" and {len(domain_names) - 5} more"
+	
+	InAppNotification.objects.create(
+		title=notif_title,
+		description=notif_desc,
+		notification_type='info',
+		icon='mdi-rocket-launch',
+		is_read=False
+	)
+	
+	logger.info(f'Sent batch scan notification for {scan_count} scans')
 
 
 def send_discord_message(
@@ -1505,6 +1570,44 @@ def parse_dns_records(domain_info, dns):
 	})
 
 
+def parse_whois_date(date_str):
+	"""Parse WHOIS date string to Django-compatible datetime.
+	
+	Handles various formats including:
+	- ISO format: YYYY-MM-DD HH:MM:SS
+	- Finnish format: DD.MM.YYYY HH:MM:SS
+	- European format: DD/MM/YYYY HH:MM:SS
+	"""
+	if not date_str:
+		return None
+	if isinstance(date_str, (datetime,)):
+		return date_str
+	
+	# Common date formats to try
+	date_formats = [
+		'%Y-%m-%d %H:%M:%S',        # ISO format
+		'%Y-%m-%dT%H:%M:%S',        # ISO with T separator
+		'%Y-%m-%dT%H:%M:%SZ',       # ISO with Z
+		'%Y-%m-%dT%H:%M:%S.%fZ',    # ISO with milliseconds and Z
+		'%Y-%m-%dT%H:%M:%S.%f',     # ISO with milliseconds
+		'%Y-%m-%d',                  # Date only ISO
+		'%d.%m.%Y %H:%M:%S',        # Finnish/European format (DD.MM.YYYY)
+		'%d.%m.%Y',                  # Finnish date only
+		'%d/%m/%Y %H:%M:%S',        # European with slashes
+		'%d/%m/%Y',                  # European date only with slashes
+		'%m/%d/%Y %H:%M:%S',        # US format
+		'%m/%d/%Y',                  # US date only
+	]
+	
+	for fmt in date_formats:
+		try:
+			return datetime.strptime(str(date_str).strip(), fmt)
+		except ValueError:
+			continue
+	
+	return None
+
+
 def save_domain_info_to_db(target, domain_info):
 	"""Save domain info to the database."""
 	if Domain.objects.filter(name=target).exists():
@@ -1513,11 +1616,11 @@ def save_domain_info_to_db(target, domain_info):
 		# Create or update DomainInfo
 		domain_info_obj, created = DomainInfo.objects.get_or_create(domain=domain)
 		
-		# Update basic domain information
+		# Update basic domain information - parse dates to handle various formats
 		domain_info_obj.dnssec = domain_info.get('dnssec', False)
-		domain_info_obj.created = domain_info.get('created')
-		domain_info_obj.updated = domain_info.get('updated')
-		domain_info_obj.expires = domain_info.get('expires')
+		domain_info_obj.created = parse_whois_date(domain_info.get('created'))
+		domain_info_obj.updated = parse_whois_date(domain_info.get('updated'))
+		domain_info_obj.expires = parse_whois_date(domain_info.get('expires'))
 		domain_info_obj.whois_server = domain_info.get('whois_server')
 		domain_info_obj.geolocation_iso = domain_info.get('registrant_country')
 

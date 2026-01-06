@@ -365,8 +365,12 @@ def start_multiple_scan(request, slug):
             excluded_paths = request.POST['excludedPaths'] # string separated by ,
             # split excluded paths by ,
             excluded_paths = [path.strip() for path in excluded_paths.split(',')]
+            
+            # Get ntfy notification preference for this batch
+            ntfy_enabled = request.POST.get('ntfy_enabled') == 'on'
 
             grouped_scans = []
+            scan_ids = []  # Track scan IDs for batch notification
 
             for domain_id in list_of_domain_ids.split(","):
                 # Start the celery task
@@ -375,7 +379,12 @@ def start_multiple_scan(request, slug):
                     engine_id=engine_id,
                     initiated_by_id=request.user.id
                 )
-                # domain = get_object_or_404(Domain, id=domain_id)
+                scan_ids.append(scan_history_id)
+                
+                # Set ntfy_enabled on the scan
+                scan = ScanHistory.objects.get(pk=scan_history_id)
+                scan.ntfy_enabled = ntfy_enabled
+                scan.save()
 
                 kwargs = {
                     'scan_history_id': scan_history_id,
@@ -388,10 +397,16 @@ def start_multiple_scan(request, slug):
                     'out_of_scope_subdomains': subdomains_out,
                     'starting_point_path': starting_point_path,
                     'excluded_paths': excluded_paths,
+                    'batch_mode': True,  # Skip individual start notifications
                 }
 
                 _scan_task = initiate_scan.si(**kwargs)
                 grouped_scans.append(_scan_task)
+
+            # Send batch start notification
+            engine = EngineType.objects.filter(pk=engine_id).first()
+            engine_name = engine.engine_name if engine else None
+            send_batch_scan_notif(scan_ids, request.user, engine_name=engine_name)
 
             celery_group = group(grouped_scans)
             celery_group.apply_async()
@@ -801,6 +816,8 @@ def start_organization_scan(request, id, slug):
         # split excluded paths by ,
         excluded_paths = [path.strip() for path in excluded_paths.split(',')]
 
+        scan_ids = []  # Track scan IDs for batch notification
+        
         # Start Celery task for each organization's domains
         for domain in organization.get_domains():
             scan_history_id = create_scan_object(
@@ -808,6 +825,8 @@ def start_organization_scan(request, id, slug):
                 engine_id=engine_id,
                 initiated_by_id=request.user.id
             )
+            scan_ids.append(scan_history_id)
+            
             scan = ScanHistory.objects.get(pk=scan_history_id)
             scan.ntfy_enabled = ntfy_enabled
             scan.save()
@@ -823,9 +842,14 @@ def start_organization_scan(request, id, slug):
                 'out_of_scope_subdomains': subdomains_out,
                 'starting_point_path': starting_point_path,
                 'excluded_paths': excluded_paths,
+                'batch_mode': True,  # Skip individual start notifications
             }
             initiate_scan.apply_async(kwargs=kwargs)
 
+        # Send batch start notification
+        engine = EngineType.objects.filter(pk=engine_id).first()
+        engine_name = engine.engine_name if engine else None
+        send_batch_scan_notif(scan_ids, request.user, engine_name=engine_name)
 
         # Send start notif
         ndomains = len(organization.get_domains())

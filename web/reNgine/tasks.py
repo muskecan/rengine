@@ -62,6 +62,7 @@ def initiate_scan(
 		initiated_by_id=None,
 		starting_point_path='',
 		excluded_paths=[],
+		batch_mode=False,
 	):
 	"""Initiate a new scan.
 
@@ -76,6 +77,7 @@ def initiate_scan(
 		starting_point_path (str): URL path. Default: '' Defined where to start the scan.
 		initiated_by (int): User ID initiating the scan.
 		excluded_paths (list): Excluded paths. Default: [], url paths to exclude from scan.
+		batch_mode (bool): If True, skip initial start notification (batch notif sent separately).
 	"""
 	logger.info('Initiating scan on celery')
 	scan = None
@@ -143,13 +145,14 @@ def initiate_scan(
 		}
 		ctx_str = json.dumps(ctx, indent=2)
 
-		# Send start notif
+		# Send start notif (skip if batch_mode - batch notification already sent)
 		logger.warning(f'Starting scan {scan_history_id} with context:\n{ctx_str}')
-		send_scan_notif.delay(
-			scan_history_id,
-			subscan_id=None,
-			engine_id=engine_id,
-			status=CELERY_TASK_STATUS_MAP[scan.scan_status])
+		if not batch_mode:
+			send_scan_notif.delay(
+				scan_history_id,
+				subscan_id=None,
+				engine_id=engine_id,
+				status=CELERY_TASK_STATUS_MAP[scan.scan_status])
 
 		# Save imported subdomains in DB
 		save_imported_subdomains(imported_subdomains, ctx=ctx)
