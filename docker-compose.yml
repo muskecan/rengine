@@ -51,6 +51,7 @@ services:
       - POSTGRES_HOST=${POSTGRES_HOST}
       - MAX_CONCURRENCY=${MAX_CONCURRENCY}
       - MIN_CONCURRENCY=${MIN_CONCURRENCY}
+      - GOOFUZZ_GCS_KEYS=${GOOFUZZ_GCS_KEYS}
     depends_on:
       - db
       - redis

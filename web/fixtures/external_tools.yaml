@@ -306,7 +306,7 @@
     version_lookup_command: crlfuzz -V
     update_command: go install -v github.com/dwisiswant0/crlfuzz/cmd/crlfuzz@latest
     install_command: go install -v github.com/dwisiswant0/crlfuzz/cmd/crlfuzz@latest
-    version_match_regex: 'gowitness:\s*(\d+\.)?(\d+\.)?(\*|\d+)'
+    version_match_regex: 'v(\d+\.)?(\d+\.)?(\*|\d+)'
     is_default: true
     is_subdomain_gathering: false
     is_github_cloned: false
@@ -360,6 +360,132 @@
     update_command: go install -v github.com/sensepost/gowitness@latest
     install_command: go install -v github.com/sensepost/gowitness@latest
     version_match_regex: 'gowitness:\s*(\d+\.)?(\d+\.)?(\*|\d+)'
+    is_default: true
+    is_subdomain_gathering: false
+    is_github_cloned: false
+    github_clone_path: null
+    subdomain_gathering_command: null
+- model: scanEngine.installedexternaltool
+  pk: 21
+  fields:
+    logo_url: null
+    name: waybackurls
+    description: Fetch all the URLs that the Wayback Machine knows about for a domain.
+      Useful for discovering historical endpoints, attack surface, and subdomains from archived URLs.
+    github_url: https://github.com/tomnomnom/waybackurls
+    license_url: https://github.com/tomnomnom/waybackurls/blob/master/LICENSE
+    version_lookup_command: null
+    update_command: go install github.com/tomnomnom/waybackurls@latest
+    install_command: go install github.com/tomnomnom/waybackurls@latest
+    version_match_regex: null
+    is_default: false
+    is_subdomain_gathering: true
+    is_github_cloned: false
+    github_clone_path: null
+    subdomain_gathering_command: 'echo {TARGET} | waybackurls | unfurl -u domains | grep {TARGET} | sort -u > {OUTPUT}'
+- model: scanEngine.installedexternaltool
+  pk: 22
+  fields:
+    logo_url: null
+    name: s3scanner
+    description: Scan for misconfigured S3 buckets across multiple cloud providers
+      including AWS, GCP, DigitalOcean, Dreamhost, and Linode.
+    github_url: https://github.com/sa7mon/s3scanner
+    license_url: https://github.com/sa7mon/s3scanner/blob/main/LICENSE
+    version_lookup_command: s3scanner --version
+    update_command: go install github.com/sa7mon/s3scanner@latest
+    install_command: go install github.com/sa7mon/s3scanner@latest
+    version_match_regex: 'v(\d+\.)?(\d+\.)?(\*|\d+)'
+    is_default: true
+    is_subdomain_gathering: false
+    is_github_cloned: false
+    github_clone_path: null
+    subdomain_gathering_command: null
+- model: scanEngine.installedexternaltool
+  pk: 23
+  fields:
+    logo_url: null
+    name: wafw00f
+    description: Web Application Firewall detection tool. Identifies and fingerprints
+      WAF products protecting websites.
+    github_url: https://github.com/EnableSecurity/wafw00f
+    license_url: https://github.com/EnableSecurity/wafw00f/blob/master/LICENSE
+    version_lookup_command: wafw00f --version
+    update_command: pip3 install wafw00f --upgrade
+    install_command: pip3 install wafw00f
+    version_match_regex: '(\d+\.)?(\d+\.)?(\*|\d+)'
+    is_default: true
+    is_subdomain_gathering: false
+    is_github_cloned: false
+    github_clone_path: null
+    subdomain_gathering_command: null
+- model: scanEngine.installedexternaltool
+  pk: 24
+  fields:
+    logo_url: null
+    name: nmap
+    description: Network exploration and security auditing tool. Used for port scanning,
+      service detection, and vulnerability scanning.
+    github_url: https://github.com/nmap/nmap
+    license_url: https://github.com/nmap/nmap/blob/master/LICENSE
+    version_lookup_command: nmap --version
+    update_command: apt install nmap -y
+    install_command: apt install nmap -y
+    version_match_regex: '(\d+\.)?(\d+\.)?(\*|\d+)'
+    is_default: true
+    is_subdomain_gathering: false
+    is_github_cloned: false
+    github_clone_path: null
+    subdomain_gathering_command: null
+- model: scanEngine.installedexternaltool
+  pk: 25
+  fields:
+    logo_url: null
+    name: gf
+    description: A wrapper around grep to avoid typing common patterns. Used for
+      pattern matching on URLs to find potential vulnerabilities.
+    github_url: https://github.com/tomnomnom/gf
+    license_url: https://github.com/tomnomnom/gf/blob/master/LICENSE
+    version_lookup_command: null
+    update_command: go install github.com/tomnomnom/gf@latest
+    install_command: go install github.com/tomnomnom/gf@latest
+    version_match_regex: null
+    is_default: true
+    is_subdomain_gathering: false
+    is_github_cloned: false
+    github_clone_path: null
+    subdomain_gathering_command: null
+- model: scanEngine.installedexternaltool
+  pk: 26
+  fields:
+    logo_url: null
+    name: unfurl
+    description: Pull out bits of URLs provided on stdin. Useful for extracting
+      domains, paths, and parameters from URL lists.
+    github_url: https://github.com/tomnomnom/unfurl
+    license_url: https://github.com/tomnomnom/unfurl/blob/master/LICENSE
+    version_lookup_command: null
+    update_command: go install github.com/tomnomnom/unfurl@latest
+    install_command: go install github.com/tomnomnom/unfurl@latest
+    version_match_regex: null
+    is_default: true
+    is_subdomain_gathering: false
+    is_github_cloned: false
+    github_clone_path: null
+    subdomain_gathering_command: null
+- model: scanEngine.installedexternaltool
+  pk: 27
+  fields:
+    logo_url: null
+    name: uro
+    description: URL deduplication tool that reduces scan scope by removing
+      duplicate and similar URLs while preserving unique endpoints.
+    github_url: https://github.com/s0md3v/uro
+    license_url: https://github.com/s0md3v/uro/blob/master/LICENSE
+    version_lookup_command: pip3 show uro
+    update_command: pip3 install uro --upgrade
+    install_command: pip3 install uro
+    version_match_regex: '(\d+\.)?(\d+\.)?(\*|\d+)'
     is_default: true
     is_subdomain_gathering: false
     is_github_cloned: false

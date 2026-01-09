@@ -9,7 +9,7 @@
 # retries: 1                        # Nuclei
 
 subdomain_discovery: {
-  'uses_tools': ['subfinder', 'ctfr', 'sublist3r', 'tlsx', 'oneforall', 'netlas'],  # amass-passive, amass-active, All
+  'uses_tools': ['subfinder', 'ctfr', 'sublist3r', 'tlsx', 'oneforall', 'netlas', 'waybackurls', 'amass-passive'],  # amass-active, All
   'enable_http_crawl': true,
   'threads': 30,
   'timeout': 5,

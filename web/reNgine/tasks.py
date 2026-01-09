@@ -708,6 +708,8 @@ def osint_discovery(config, host, scan_history_id, activity_id, results_dir, ctx
 	"""
 	scan_history = ScanHistory.objects.get(pk=scan_history_id)
 	osint_lookup = config.get(OSINT_DISCOVER, [])
+	logger.info(f'osint_discovery: config={config}')
+	logger.info(f'osint_discovery: osint_lookup={osint_lookup}')
 	osint_intensity = config.get(INTENSITY, 'normal')
 	documents_limit = config.get(OSINT_DOCUMENTS_LIMIT, 50)
 	results = {}
@@ -718,13 +720,16 @@ def osint_discovery(config, host, scan_history_id, activity_id, results_dir, ctx
 	# Get and save meta info
 	if 'metainfo' in osint_lookup:
 		if osint_intensity == 'normal':
-			meta_dict = DottedDict({
-				'osint_target': host,
-				'domain': host,
-				'scan_id': scan_history_id,
-				'documents_limit': documents_limit
-			})
-			meta_info.append(save_metadata_info(meta_dict))
+			try:
+				meta_dict = DottedDict({
+					'osint_target': host,
+					'domain': host,
+					'scan_id': scan_history_id,
+					'documents_limit': documents_limit
+				})
+				meta_info.append(save_metadata_info(meta_dict))
+			except Exception as e:
+				logger.error(f'osint_discovery: Error in save_metadata_info: {e}')
 
 		# TODO: disabled for now
 		# elif osint_intensity == 'deep':
@@ -743,6 +748,7 @@ def osint_discovery(config, host, scan_history_id, activity_id, results_dir, ctx
 	grouped_tasks = []
 
 	if 'emails' in osint_lookup:
+		logger.info(f'osint_discovery: Adding h8mail task for {host}')
 		_task = h8mail.si(
 			config=config,
 			host=host,
@@ -754,6 +760,7 @@ def osint_discovery(config, host, scan_history_id, activity_id, results_dir, ctx
 		grouped_tasks.append(_task)
 
 	if 'employees' in osint_lookup:
+		logger.info(f'osint_discovery: Adding theHarvester task for {host}')
 		ctx['track'] = False
 		_task = theHarvester.si(
 			config=config,
@@ -765,6 +772,7 @@ def osint_discovery(config, host, scan_history_id, activity_id, results_dir, ctx
 		)
 		grouped_tasks.append(_task)
 
+	logger.info(f'osint_discovery: Running {len(grouped_tasks)} tasks in group')
 	celery_group = group(grouped_tasks)
 	job = celery_group.apply_async()
 	while not job.ready():
@@ -1061,6 +1069,7 @@ def theHarvester(config, host, scan_history_id, activity_id, results_dir, ctx={}
 	Returns:
 		dict: Dict of emails, employees, hosts and ips found during crawling.
 	"""
+	logger.info(f'theHarvester: Starting execution for {host}')
 	scan_history = ScanHistory.objects.get(pk=scan_history_id)
 	enable_http_crawl = config.get(ENABLE_HTTP_CRAWL, DEFAULT_ENABLE_HTTP_CRAWL)
 	output_path_json = f'{results_dir}/theHarvester.json'
