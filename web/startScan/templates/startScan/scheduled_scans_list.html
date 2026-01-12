@@ -1,0 +1,314 @@
+{% extends 'base/base.html' %}
+{% load static %}
+{% load custom_tags %}
+{% load permission_tags %}
+
+{% block title %}
+Scheduled Scans (Cron)
+{% endblock title %}
+
+{% block custom_js_css_link %}
+<link rel="stylesheet" type="text/css" href="{% static 'plugins/switches/switches.min.css' %}">
+{% endblock custom_js_css_link %}
+
+{% block breadcrumb_title %}
+<li class="breadcrumb-item active" aria-current="page">Scheduled Scans (Cron)</li>
+{% endblock breadcrumb_title %}
+
+{% block page_title %}
+Scheduled Scans (Cron-based)
+{% endblock page_title %}
+
+{% block main_content %}
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div class="p-2">
+        <div class="row">
+          <div class="col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+            <p class="text-muted mb-0">
+              <i class="fe-info me-1"></i>
+              Cron-based scheduled scans run automatically and only notify you when <strong>new findings</strong> are discovered (excluding vulnerabilities).
+            </p>
+          </div>
+          <div class="col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12 text-end">
+            {% if user|can:'initiate_scans_subscans' %}
+            <a class="btn btn-soft-danger float-end disabled ms-1" href="#" onclick="deleteMultipleScheduledScans()" id="delete_multiple_btn">Delete Selected</a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <form method="POST" id="scheduled_scans_form">
+        {% csrf_token %}
+        <table id="scheduled_scans_table" class="table dt-responsive w-100">
+          <thead>
+            <tr>
+              <th class="checkbox-column text-center">#</th>
+              <th>Name</th>
+              <th>Target</th>
+              <th>Scan Engine</th>
+              <th>Cron Schedule</th>
+              <th>Last Run</th>
+              <th>Next Run</th>
+              <th class="text-center">Runs</th>
+              <th class="text-center">Status</th>
+              <th class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for scan in scheduled_scans %}
+            <tr>
+              <td class="text-center">{{ scan.id }}</td>
+              <td>
+                <a href="{% url 'scheduled_scan_detail' current_project.slug scan.id %}">
+                  {{ scan.name|truncatechars:40 }}
+                </a>
+              </td>
+              <td>
+                {% if scan.domain %}
+                  <span class="badge bg-primary">{{ scan.domain.name }}</span>
+                {% elif scan.organization %}
+                  <span class="badge bg-info">{{ scan.organization.name }} (Org)</span>
+                {% endif %}
+              </td>
+              <td>{{ scan.scan_engine.engine_name }}</td>
+              <td>
+                <code class="text-info">{{ scan.cron_expression }}</code>
+              </td>
+              <td>
+                {% if scan.last_run_at %}
+                  <span class="datetime" datetime="{{ scan.last_run_at|date:'c' }}">{{ scan.last_run_at }}</span>
+                {% else %}
+                  <span class="text-muted">Never</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if scan.next_run_at and scan.status == 0 %}
+                  <span class="datetime" datetime="{{ scan.next_run_at|date:'c' }}">{{ scan.next_run_at }}</span>
+                {% else %}
+                  <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+              <td class="text-center">{{ scan.total_runs }}</td>
+              <td class="text-center">
+                <label class="switch s-icons s-outline s-outline-{% if scan.status == 0 %}success{% elif scan.status == 1 %}warning{% else %}danger{% endif %}">
+                  <input type="checkbox" 
+                         {% if scan.status == 0 %}checked{% endif %} 
+                         onchange="toggleScheduledScan({{ scan.id }}, this)"
+                         {% if scan.status == 2 %}disabled{% endif %}>
+                  <span class="slider round"></span>
+                </label>
+              </td>
+              <td class="text-center">
+                <a href="{% url 'scheduled_scan_detail' current_project.slug scan.id %}" class="text-info me-2" data-bs-toggle="tooltip" title="View Details">
+                  <i class="fe-eye"></i>
+                </a>
+                {% if user|can:'modify_scan_results' %}
+                <a onclick="deleteScheduledScan({{ scan.id }})" class="text-danger" href="#" data-bs-toggle="tooltip" title="Delete">
+                  <i class="fe-trash-2"></i>
+                </a>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Help Card -->
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title"><i class="fe-help-circle me-1"></i> Cron Expression Guide</h5>
+        <p class="text-muted mb-2">Cron expressions define when your scans run. Format: <code>minute hour day month weekday</code></p>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered">
+            <thead>
+              <tr>
+                <th>Expression</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><code>0 2 * * *</code></td><td>Every day at 2:00 AM</td></tr>
+              <tr><td><code>0 0 * * 0</code></td><td>Every Sunday at midnight</td></tr>
+              <tr><td><code>0 */6 * * *</code></td><td>Every 6 hours</td></tr>
+              <tr><td><code>0 9 * * 1-5</code></td><td>Every weekday at 9:00 AM</td></tr>
+              <tr><td><code>0 0 1 * *</code></td><td>First day of every month at midnight</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock main_content %}
+
+{% block page_level_script %}
+<script>
+$(document).ready(function() {
+  $('#scheduled_scans_table').DataTable({
+    headerCallback: function(e, a, t, n, s) {
+      e.getElementsByTagName("th")[0].innerHTML='<div class="form-check mb-2 form-check-primary"><input type="checkbox" class="float-start form-check-input chk-parent" id="head_checkbox" onclick="mainCheckBoxSelected(this)">\n<span class="new-control-indicator"></span><span style="visibility:hidden">c</span></div>\n'
+    },
+    "oLanguage": {
+      "oPaginate": { "sPrevious": '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="feather feather-arrow-left"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>', "sNext": '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="feather feather-arrow-right"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>' },
+      "sInfo": "Showing page _PAGE_ of _PAGES_",
+      "sSearch": '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>',
+      "sSearchPlaceholder": "Search...",
+      "sLengthMenu": "Results :  _MENU_",
+    },
+    "columnDefs": [
+      {
+        "targets": 0, "width": "20px", "orderable": false, 
+        render: function(e, a, t, n) {
+          return '<div class="form-check mb-2 form-check-primary"><input type="checkbox" name="scheduled_scan_checkbox[' + e + ']" class="float-start form-check-input scheduled_scan_checkbox" value="' + e + '" onchange="toggleMultipleButton()">\n<span class="new-control-indicator"></span><span style="visibility:hidden">c</span></div>'
+        }
+      }
+    ],
+    "lengthMenu": [10, 20, 50, 100],
+    "pageLength": 20,
+    "order": [[1, 'asc']],
+    "dom": "<'dt--top-section'<'row'<'col-12 col-sm-6 d-flex justify-content-sm-start justify-content-center mt-sm-0 mt-3'f><'col-12 col-sm-6 d-flex justify-content-sm-end justify-content-center'l>>>" +
+      "<'table-responsive'tr>" +
+      "<'dt--bottom-section d-sm-flex justify-content-sm-between text-center'<'dt--pages-count  mb-sm-0 mb-3'i><'dt--pagination'p>>",
+  });
+  
+  // Convert datetime elements to relative time
+  $('span.datetime').each(function() {
+    var dt = new Date($(this).attr('datetime'));
+    $(this).text(timeago.format(dt));
+  });
+});
+
+function mainCheckBoxSelected(checkbox) {
+  if (checkbox.checked) {
+    $("#delete_multiple_btn").removeClass("disabled");
+    $(".scheduled_scan_checkbox").prop('checked', true);
+  } else {
+    $("#delete_multiple_btn").addClass("disabled");
+    $(".scheduled_scan_checkbox").prop('checked', false);
+  }
+}
+
+function toggleMultipleButton() {
+  var checkedCount = $(".scheduled_scan_checkbox:checked").length;
+  if (checkedCount > 0) {
+    $("#delete_multiple_btn").removeClass("disabled");
+  } else {
+    $("#delete_multiple_btn").addClass("disabled");
+  }
+}
+
+function toggleScheduledScan(id, checkbox) {
+  fetch(`/scan/{{ current_project.slug }}/scheduled-scans/${id}/toggle/`, {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': getCookie('csrftoken'),
+      'Content-Type': 'application/json',
+    },
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'success') {
+      Snackbar.show({
+        text: `Scheduled scan ${data.new_status}`,
+        pos: 'top-right',
+        actionTextColor: '#42A5F5',
+        duration: 2000
+      });
+    } else {
+      checkbox.checked = !checkbox.checked;
+      Snackbar.show({
+        text: 'Error toggling scheduled scan',
+        pos: 'top-right',
+        actionTextColor: '#fff',
+        backgroundColor: '#e7515a',
+        duration: 2500
+      });
+    }
+  })
+  .catch(error => {
+    checkbox.checked = !checkbox.checked;
+    console.error('Error:', error);
+  });
+}
+
+function deleteScheduledScan(id) {
+  swal({
+    title: 'Delete Scheduled Scan?',
+    text: "This action cannot be undone.",
+    type: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Delete',
+    padding: '2em',
+    showLoaderOnConfirm: true,
+    preConfirm: function() {
+      return fetch(`/scan/{{ current_project.slug }}/scheduled-scans/${id}/delete/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': getCookie('csrftoken'),
+        },
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === 'true') {
+          location.reload();
+        } else {
+          throw new Error('Delete failed');
+        }
+      });
+    }
+  });
+}
+
+function deleteMultipleScheduledScans() {
+  var checkedCount = $(".scheduled_scan_checkbox:checked").length;
+  if (!checkedCount) {
+    swal({
+      title: '',
+      text: "Please select at least one scheduled scan to delete.",
+      type: 'error',
+      padding: '2em'
+    });
+    return;
+  }
+  
+  swal({
+    title: `Delete ${checkedCount} Scheduled Scan(s)?`,
+    text: "This action cannot be undone.",
+    type: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Delete',
+    padding: '2em',
+    showLoaderOnConfirm: true,
+    preConfirm: function() {
+      // Delete each selected scan
+      var promises = [];
+      $(".scheduled_scan_checkbox:checked").each(function() {
+        var id = $(this).val();
+        promises.push(
+          fetch(`/scan/{{ current_project.slug }}/scheduled-scans/${id}/delete/`, {
+            method: 'POST',
+            headers: {
+              'X-CSRFToken': getCookie('csrftoken'),
+            },
+          })
+        );
+      });
+      return Promise.all(promises).then(() => location.reload());
+    }
+  });
+}
+</script>
+{% endblock page_level_script %}

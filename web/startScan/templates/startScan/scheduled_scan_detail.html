@@ -1,0 +1,331 @@
+{% extends 'base/base.html' %}
+{% load static %}
+{% load custom_tags %}
+{% load permission_tags %}
+
+{% block title %}
+{{ scheduled_scan.name }}
+{% endblock title %}
+
+{% block custom_js_css_link %}
+<link rel="stylesheet" type="text/css" href="{% static 'plugins/switches/switches.min.css' %}">
+{% endblock custom_js_css_link %}
+
+{% block breadcrumb_title %}
+<li class="breadcrumb-item"><a href="{% url 'scheduled_scans_list' current_project.slug %}">Scheduled Scans</a></li>
+<li class="breadcrumb-item active" aria-current="page">{{ scheduled_scan.name|truncatechars:30 }}</li>
+{% endblock breadcrumb_title %}
+
+{% block page_title %}
+{{ scheduled_scan.name }}
+{% endblock page_title %}
+
+{% block main_content %}
+<div class="row">
+  <!-- Scan Details Card -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title mb-0">
+          <i class="fe-info me-1"></i> Scan Configuration
+        </h4>
+      </div>
+      <div class="card-body">
+        <table class="table table-borderless mb-0">
+          <tbody>
+            <tr>
+              <td class="text-muted" style="width: 140px;">Target</td>
+              <td>
+                {% if scheduled_scan.domain %}
+                  <span class="badge bg-primary">{{ scheduled_scan.domain.name }}</span>
+                {% elif scheduled_scan.organization %}
+                  <span class="badge bg-info">{{ scheduled_scan.organization.name }} (Organization)</span>
+                  <br><small class="text-muted">{{ scheduled_scan.get_targets|length }} domain(s)</small>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td class="text-muted">Scan Engine</td>
+              <td>{{ scheduled_scan.scan_engine.engine_name }}</td>
+            </tr>
+            <tr>
+              <td class="text-muted">Cron Schedule</td>
+              <td><code class="text-info">{{ scheduled_scan.cron_expression }}</code></td>
+            </tr>
+            <tr>
+              <td class="text-muted">Status</td>
+              <td>
+                {% if scheduled_scan.status == 0 %}
+                  <span class="badge bg-success">Active</span>
+                {% elif scheduled_scan.status == 1 %}
+                  <span class="badge bg-warning">Paused</span>
+                {% else %}
+                  <span class="badge bg-danger">Stopped</span>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td class="text-muted">Created</td>
+              <td>{{ scheduled_scan.created_at|date:"M d, Y H:i" }}</td>
+            </tr>
+            <tr>
+              <td class="text-muted">Created By</td>
+              <td>{{ scheduled_scan.created_by.username }}</td>
+            </tr>
+            <tr>
+              <td class="text-muted">Total Runs</td>
+              <td><span class="badge bg-secondary">{{ scheduled_scan.total_runs }}</span></td>
+            </tr>
+            <tr>
+              <td class="text-muted">Last Run</td>
+              <td>
+                {% if scheduled_scan.last_run_at %}
+                  <span class="datetime" datetime="{{ scheduled_scan.last_run_at|date:'c' }}">{{ scheduled_scan.last_run_at }}</span>
+                {% else %}
+                  <span class="text-muted">Never</span>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td class="text-muted">Next Run</td>
+              <td>
+                {% if scheduled_scan.next_run_at and scheduled_scan.status == 0 %}
+                  <span class="datetime" datetime="{{ scheduled_scan.next_run_at|date:'c' }}">{{ scheduled_scan.next_run_at }}</span>
+                {% else %}
+                  <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td class="text-muted">Notifications</td>
+              <td>
+                {% if scheduled_scan.ntfy_enabled %}
+                  <span class="text-success"><i class="fe-bell me-1"></i> Enabled</span>
+                {% else %}
+                  <span class="text-muted"><i class="fe-bell-off me-1"></i> Disabled</span>
+                {% endif %}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        
+        <div class="mt-3">
+          {% if scheduled_scan.status == 0 %}
+          <button class="btn btn-warning btn-sm" onclick="toggleStatus()">
+            <i class="fe-pause me-1"></i> Pause
+          </button>
+          {% elif scheduled_scan.status == 1 %}
+          <button class="btn btn-success btn-sm" onclick="toggleStatus()">
+            <i class="fe-play me-1"></i> Resume
+          </button>
+          {% endif %}
+          {% if user|can:'modify_scan_results' %}
+          <button class="btn btn-danger btn-sm" onclick="deleteScheduledScan()">
+            <i class="fe-trash-2 me-1"></i> Delete
+          </button>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Baselines Card -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title mb-0">
+          <i class="fe-database me-1"></i> Baselines (per Target)
+        </h4>
+      </div>
+      <div class="card-body">
+        {% if baselines %}
+        <div class="table-responsive">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>Target</th>
+                <th class="text-center">Total Findings</th>
+                <th>Breakdown</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for baseline in baselines %}
+              <tr>
+                <td>{{ baseline.domain.name|truncatechars:25 }}</td>
+                <td class="text-center">
+                  <span class="badge bg-primary">{{ baseline.baseline_findings_count }}</span>
+                </td>
+                <td>
+                  <small class="text-muted">
+                    {% if baseline.subdomains_count %}Sub:{{ baseline.subdomains_count }} {% endif %}
+                    {% if baseline.endpoints_count %}Ep:{{ baseline.endpoints_count }} {% endif %}
+                    {% if baseline.ports_count %}Port:{{ baseline.ports_count }} {% endif %}
+                    {% if baseline.technologies_count %}Tech:{{ baseline.technologies_count }} {% endif %}
+                    {% if baseline.emails_count %}Email:{{ baseline.emails_count }} {% endif %}
+                  </small>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">No baselines yet. Baselines are created after the first scan run.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Run History -->
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title mb-0">
+          <i class="fe-clock me-1"></i> Run History
+        </h4>
+      </div>
+      <div class="card-body">
+        {% if runs %}
+        <div class="table-responsive">
+          <table class="table" id="runs_table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Started</th>
+                <th>Scan ID</th>
+                <th>Target</th>
+                <th class="text-center">New Findings</th>
+                <th class="text-center">Baseline Updated</th>
+                <th class="text-center">Notification</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for run in runs %}
+              <tr>
+                <td>{{ run.id }}</td>
+                <td>
+                  <span class="datetime" datetime="{{ run.started_at|date:'c' }}">{{ run.started_at }}</span>
+                </td>
+                <td>
+                  <a href="{% url 'detail_scan' current_project.slug run.scan_history.id %}">
+                    #{{ run.scan_history.id }}
+                  </a>
+                </td>
+                <td>{{ run.scan_history.domain.name|truncatechars:30 }}</td>
+                <td class="text-center">
+                  {% if run.new_findings_count > 0 %}
+                    <span class="badge bg-success">+{{ run.new_findings_count }}</span>
+                  {% else %}
+                    <span class="text-muted">0</span>
+                  {% endif %}
+                </td>
+                <td class="text-center">
+                  {% if run.baseline_updated %}
+                    <i class="fe-check-circle text-success"></i>
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+                <td class="text-center">
+                  {% if run.notification_sent %}
+                    <i class="fe-bell text-info"></i>
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <a href="{% url 'detail_scan' current_project.slug run.scan_history.id %}" class="btn btn-sm btn-outline-primary">
+                    View Scan
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">No runs yet. The first run will happen according to the cron schedule.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock main_content %}
+
+{% block page_level_script %}
+<script>
+$(document).ready(function() {
+  // Convert datetime elements to relative time
+  $('span.datetime').each(function() {
+    var dt = new Date($(this).attr('datetime'));
+    $(this).text(timeago.format(dt));
+  });
+  
+  // Initialize DataTable for runs
+  {% if runs %}
+  $('#runs_table').DataTable({
+    "order": [[0, 'desc']],
+    "pageLength": 25,
+    "dom": "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
+           "<'row'<'col-sm-12'tr>>" +
+           "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
+  });
+  {% endif %}
+});
+
+function toggleStatus() {
+  fetch('{% url "toggle_scheduled_scan_status" current_project.slug scheduled_scan.id %}', {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': getCookie('csrftoken'),
+      'Content-Type': 'application/json',
+    },
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'success') {
+      location.reload();
+    } else {
+      Snackbar.show({
+        text: 'Error toggling status',
+        pos: 'top-right',
+        actionTextColor: '#fff',
+        backgroundColor: '#e7515a',
+        duration: 2500
+      });
+    }
+  });
+}
+
+function deleteScheduledScan() {
+  swal({
+    title: 'Delete Scheduled Scan?',
+    text: "This will delete the scheduled scan and all its history. This action cannot be undone.",
+    type: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Delete',
+    padding: '2em',
+    showLoaderOnConfirm: true,
+    preConfirm: function() {
+      return fetch('{% url "delete_scheduled_scan" current_project.slug scheduled_scan.id %}', {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': getCookie('csrftoken'),
+        },
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === 'true') {
+          window.location.href = '{% url "scheduled_scans_list" current_project.slug %}';
+        } else {
+          throw new Error('Delete failed');
+        }
+      });
+    }
+  });
+}
+</script>
+{% endblock page_level_script %}

@@ -209,6 +209,14 @@ CELERY_IGNORE_RESULTS = False
 CELERY_EAGER_PROPAGATES_EXCEPTIONS = True
 CELERY_TRACK_STARTED = True
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+
+# Celery Beat Schedule - for periodic tasks
+CELERY_BEAT_SCHEDULE = {
+    'check-scheduled-scans': {
+        'task': 'check_scheduled_scans',
+        'schedule': 60.0,  # Run every 60 seconds
+    },
+}
 '''
 ROLES and PERMISSIONS
 '''

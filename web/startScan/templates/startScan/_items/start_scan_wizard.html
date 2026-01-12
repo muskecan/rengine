@@ -116,6 +116,29 @@
           <input type="hidden" name="domain_ids" value="{{domain_ids}}">
           {% endif %}
         </form>
+        
+        <!-- Schedule Scan Option -->
+        {% if domain and not domain_list %}
+        <div class="mt-4 pt-3 border-top">
+          <h5 class="mb-3"><i class="fe-clock me-1"></i> Need Recurring Scans?</h5>
+          <p class="text-muted">
+            Want this scan to run automatically on a schedule? Create a cron-based scheduled scan that only notifies you when <strong>new findings</strong> are discovered.
+          </p>
+          <a href="{% url 'create_scheduled_scan_domain' current_project.slug domain.id %}" class="btn btn-outline-primary">
+            <i class="fe-clock me-1"></i> Create Scheduled Scan
+          </a>
+        </div>
+        {% elif organization %}
+        <div class="mt-4 pt-3 border-top">
+          <h5 class="mb-3"><i class="fe-clock me-1"></i> Need Recurring Scans?</h5>
+          <p class="text-muted">
+            Want this scan to run automatically on a schedule for all targets in this organization? Create a cron-based scheduled scan that only notifies you when <strong>new findings</strong> are discovered.
+          </p>
+          <a href="{% url 'create_scheduled_scan_organization' current_project.slug organization.id %}" class="btn btn-outline-primary">
+            <i class="fe-clock me-1"></i> Create Scheduled Scan for Organization
+          </a>
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>

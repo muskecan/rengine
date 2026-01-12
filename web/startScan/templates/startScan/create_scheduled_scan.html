@@ -1,0 +1,219 @@
+{% extends 'base/base.html' %}
+{% load static %}
+{% load custom_tags %}
+{% load permission_tags %}
+
+{% block title %}
+Create Scheduled Scan
+{% endblock title %}
+
+{% block breadcrumb_title %}
+<li class="breadcrumb-item"><a href="{% url 'scheduled_scans_list' current_project.slug %}">Scheduled Scans</a></li>
+<li class="breadcrumb-item active" aria-current="page">Create</li>
+{% endblock breadcrumb_title %}
+
+{% block page_title %}
+Create Scheduled Scan
+{% endblock page_title %}
+
+{% block main_content %}
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-body">
+        <form method="POST" id="create_scheduled_scan_form">
+          {% csrf_token %}
+          
+          <!-- Target Info -->
+          <div class="mb-4">
+            <h5 class="mb-3">
+              <i class="fe-crosshair me-1"></i> Target
+            </h5>
+            {% if domain %}
+            <div class="alert alert-primary">
+              <strong>Domain:</strong> {{ domain.name }}
+            </div>
+            {% elif organization %}
+            <div class="alert alert-info">
+              <strong>Organization:</strong> {{ organization.name }}
+              <br>
+              <small class="text-muted">Includes {{ organization.get_domains.count }} domain(s)</small>
+            </div>
+            {% endif %}
+          </div>
+
+          <!-- Scan Name -->
+          <div class="mb-3">
+            <label class="form-label" for="name">Scan Name</label>
+            <input type="text" class="form-control" id="name" name="name" 
+                   placeholder="e.g., Weekly Security Scan"
+                   value="Scheduled Scan - {% if domain %}{{ domain.name }}{% elif organization %}{{ organization.name }}{% endif %}">
+            <small class="text-muted">A descriptive name to identify this scheduled scan</small>
+          </div>
+
+          <!-- Cron Expression -->
+          <div class="mb-3">
+            <label class="form-label" for="cron_expression">
+              Cron Expression <span class="text-danger">*</span>
+            </label>
+            <input type="text" class="form-control font-monospace" id="cron_expression" name="cron_expression" 
+                   placeholder="0 2 * * *" required>
+            <small class="text-muted">
+              Format: <code>minute hour day month weekday</code> — 
+              <a href="https://crontab.guru/" target="_blank" rel="noopener">Cron Expression Generator</a>
+            </small>
+            <div id="cron_preview" class="mt-2 text-info"></div>
+          </div>
+
+          <!-- Common Cron Presets -->
+          <div class="mb-4">
+            <label class="form-label">Quick Presets</label>
+            <div class="btn-group flex-wrap" role="group">
+              <button type="button" class="btn btn-outline-primary btn-sm" onclick="setCronPreset('0 */6 * * *')">Every 6 hours</button>
+              <button type="button" class="btn btn-outline-primary btn-sm" onclick="setCronPreset('0 2 * * *')">Daily at 2 AM</button>
+              <button type="button" class="btn btn-outline-primary btn-sm" onclick="setCronPreset('0 0 * * 0')">Weekly (Sunday)</button>
+              <button type="button" class="btn btn-outline-primary btn-sm" onclick="setCronPreset('0 0 * * 1')">Weekly (Monday)</button>
+              <button type="button" class="btn btn-outline-primary btn-sm" onclick="setCronPreset('0 0 1 * *')">Monthly (1st)</button>
+              <button type="button" class="btn btn-outline-primary btn-sm" onclick="setCronPreset('0 0 15 * *')">Monthly (15th)</button>
+            </div>
+          </div>
+
+          <!-- Scan Engine -->
+          <div class="mb-3">
+            <label class="form-label" for="scan_mode">
+              Scan Engine <span class="text-danger">*</span>
+            </label>
+            <select class="form-select" name="scan_mode" id="scan_mode" required>
+              {% for engine in engines %}
+              <option value="{{ engine.id }}">{{ engine.engine_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Notification -->
+          <div class="mb-4">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="ntfy_enabled" name="ntfy_enabled" checked>
+              <label class="form-check-label" for="ntfy_enabled">
+                Enable Push Notifications (ntfy)
+              </label>
+            </div>
+            <small class="text-muted">
+              Notifications are only sent when <strong>new findings</strong> are discovered (not for every scan).
+            </small>
+          </div>
+
+          <hr>
+
+          <!-- Advanced Options -->
+          <div class="mb-3">
+            <h5 class="mb-3">
+              <i class="fe-settings me-1"></i> Advanced Options
+              <button type="button" class="btn btn-link btn-sm p-0 ms-2" data-bs-toggle="collapse" data-bs-target="#advancedOptions">
+                <i class="fe-chevron-down"></i>
+              </button>
+            </h5>
+            <div class="collapse" id="advancedOptions">
+              <!-- Import Subdomains -->
+              <div class="mb-3">
+                <label class="form-label" for="importSubdomainTextArea">Import Subdomains</label>
+                <textarea class="form-control" id="importSubdomainTextArea" name="importSubdomainTextArea" rows="3" placeholder="One subdomain per line"></textarea>
+                <small class="text-muted">Pre-import known subdomains to include in every scan</small>
+              </div>
+
+              <!-- Out of Scope Subdomains -->
+              <div class="mb-3">
+                <label class="form-label" for="outOfScopeSubdomainTextarea">Out of Scope Subdomains</label>
+                <textarea class="form-control" id="outOfScopeSubdomainTextarea" name="outOfScopeSubdomainTextarea" rows="3" placeholder="One subdomain per line"></textarea>
+                <small class="text-muted">Subdomains to exclude from scanning</small>
+              </div>
+
+              <!-- Starting Point Path -->
+              <div class="mb-3">
+                <label class="form-label" for="startingPointPath">Starting Point Path</label>
+                <input type="text" class="form-control" id="startingPointPath" name="startingPointPath" placeholder="/api">
+                <small class="text-muted">URL path to focus the scan on (optional)</small>
+              </div>
+
+              <!-- Excluded Paths -->
+              <div class="mb-3">
+                <label class="form-label" for="excludedPaths">Excluded Paths</label>
+                <input type="text" class="form-control" id="excludedPaths" name="excludedPaths" value="{{ excluded_paths }}">
+                <small class="text-muted">Comma-separated paths to exclude from scanning</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-between">
+            <a href="{% url 'scheduled_scans_list' current_project.slug %}" class="btn btn-secondary">
+              <i class="fe-arrow-left me-1"></i> Cancel
+            </a>
+            <button type="submit" class="btn btn-primary">
+              <i class="fe-clock me-1"></i> Create Scheduled Scan
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Help Card -->
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title"><i class="fe-info me-1"></i> How Scheduled Scans Work</h5>
+        <ul class="text-muted mb-0">
+          <li><strong>First Run:</strong> Establishes a baseline of findings (subdomains, endpoints, ports, etc.)</li>
+          <li><strong>Subsequent Runs:</strong> Compares new results against the baseline</li>
+          <li><strong>Smart Notifications:</strong> Only notifies you when <strong>new findings</strong> are discovered</li>
+          <li><strong>Baseline Updates:</strong> If a scan discovers more findings, it becomes the new baseline</li>
+          <li><strong>Note:</strong> Vulnerability counts are not included in baseline comparisons</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock main_content %}
+
+{% block page_level_script %}
+<script>
+function setCronPreset(expression) {
+  document.getElementById('cron_expression').value = expression;
+  updateCronPreview();
+}
+
+function updateCronPreview() {
+  var expr = document.getElementById('cron_expression').value;
+  var preview = document.getElementById('cron_preview');
+  
+  if (!expr) {
+    preview.innerHTML = '';
+    return;
+  }
+  
+  // Simple cron expression descriptions
+  var descriptions = {
+    '0 */6 * * *': 'Runs every 6 hours',
+    '0 2 * * *': 'Runs daily at 2:00 AM',
+    '0 0 * * 0': 'Runs every Sunday at midnight',
+    '0 0 * * 1': 'Runs every Monday at midnight',
+    '0 0 1 * *': 'Runs on the 1st of every month at midnight',
+    '0 0 15 * *': 'Runs on the 15th of every month at midnight',
+    '*/30 * * * *': 'Runs every 30 minutes',
+    '0 * * * *': 'Runs every hour',
+    '0 0 * * *': 'Runs daily at midnight',
+  };
+  
+  if (descriptions[expr]) {
+    preview.innerHTML = '<i class="fe-clock me-1"></i>' + descriptions[expr];
+  } else {
+    preview.innerHTML = '<i class="fe-clock me-1"></i>Custom schedule';
+  }
+}
+
+document.getElementById('cron_expression').addEventListener('input', updateCronPreview);
+updateCronPreview();
+</script>
+{% endblock page_level_script %}

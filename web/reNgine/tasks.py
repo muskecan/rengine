@@ -4919,3 +4919,312 @@ def llm_vulnerability_description(vulnerability_id):
 			vuln.save()
 
 	return response
+
+
+#---------------------------#
+# Scheduled Scan Tasks      #
+#---------------------------#
+
+
+@app.task(name='check_scheduled_scans', bind=False, queue='initiate_scan_queue')
+def check_scheduled_scans():
+	"""Check for scheduled scans that are due to run.
+	
+	This task runs every minute via celery beat to check if any scheduled
+	scans need to be executed based on their cron expression.
+	"""
+	from croniter import croniter
+	from startScan.models import ScheduledScan
+	
+	logger.info('Checking for scheduled scans...')
+	
+	now = timezone.now()
+	
+	# Get all active scheduled scans
+	active_scans = ScheduledScan.objects.filter(status=0)  # 0 = Active
+	
+	for scheduled_scan in active_scans:
+		try:
+			# Parse cron expression and check if it's time to run
+			cron = croniter(scheduled_scan.cron_expression, scheduled_scan.last_run_at or scheduled_scan.created_at)
+			next_run = cron.get_next(datetime)
+			
+			# Make next_run timezone-aware if it isn't
+			if timezone.is_naive(next_run):
+				next_run = timezone.make_aware(next_run)
+			
+			# Check if we should run (within 1 minute window to avoid missing runs)
+			if next_run <= now:
+				logger.info(f'Executing scheduled scan: {scheduled_scan.name} (ID: {scheduled_scan.id})')
+				execute_scheduled_scan.delay(scheduled_scan.id)
+				
+				# Update last_run_at immediately to prevent duplicate runs
+				scheduled_scan.last_run_at = now
+				scheduled_scan.save(update_fields=['last_run_at'])
+				
+		except Exception as e:
+			logger.error(f'Error checking scheduled scan {scheduled_scan.id}: {e}')
+			continue
+	
+	logger.info('Finished checking scheduled scans')
+
+
+@app.task(name='execute_scheduled_scan', bind=False, queue='initiate_scan_queue')
+def execute_scheduled_scan(scheduled_scan_id):
+	"""Execute a scheduled scan for all its targets.
+	
+	Args:
+		scheduled_scan_id (int): ScheduledScan model ID.
+	"""
+	from startScan.models import ScheduledScan, ScheduledScanRun, ScheduledScanBaseline
+	
+	try:
+		scheduled_scan = ScheduledScan.objects.get(pk=scheduled_scan_id)
+	except ScheduledScan.DoesNotExist:
+		logger.error(f'Scheduled scan {scheduled_scan_id} not found')
+		return
+	
+	if scheduled_scan.status != 0:  # Not active
+		logger.info(f'Scheduled scan {scheduled_scan_id} is not active, skipping')
+		return
+	
+	logger.info(f'Executing scheduled scan: {scheduled_scan.name}')
+	
+	targets = scheduled_scan.get_targets()
+	if not targets:
+		logger.warning(f'No targets found for scheduled scan {scheduled_scan_id}')
+		return
+	
+	# Increment run count
+	scheduled_scan.total_runs += 1
+	scheduled_scan.save(update_fields=['total_runs'])
+	
+	# Execute scan for each target
+	for domain in targets:
+		try:
+			# Create scan history object
+			scan_history_id = create_scan_object(
+				host_id=domain.id,
+				engine_id=scheduled_scan.scan_engine.id,
+				initiated_by_id=scheduled_scan.created_by.id
+			)
+			
+			scan = ScanHistory.objects.get(pk=scan_history_id)
+			scan.ntfy_enabled = scheduled_scan.ntfy_enabled
+			scan.save()
+			
+			# Create ScheduledScanRun to track this execution
+			run = ScheduledScanRun.objects.create(
+				scheduled_scan=scheduled_scan,
+				scan_history=scan
+			)
+			
+			# Build kwargs for initiate_scan
+			kwargs = {
+				'scan_history_id': scan_history_id,
+				'domain_id': domain.id,
+				'engine_id': scheduled_scan.scan_engine.id,
+				'scan_type': LIVE_SCAN,  # Use LIVE_SCAN since we already created scan object
+				'results_dir': RENGINE_RESULTS,
+				'imported_subdomains': scheduled_scan.imported_subdomains or [],
+				'out_of_scope_subdomains': scheduled_scan.out_of_scope_subdomains or [],
+				'starting_point_path': scheduled_scan.starting_point_path or '',
+				'excluded_paths': scheduled_scan.excluded_paths or [],
+				'initiated_by_id': scheduled_scan.created_by.id,
+				'batch_mode': True  # Skip individual notifications, we'll send our own
+			}
+			
+			# Chain the scan with baseline comparison
+			scan_chain = chain(
+				initiate_scan.si(**kwargs),
+				compare_scheduled_scan_baseline.si(scheduled_scan_id, domain.id, scan_history_id, run.id)
+			)
+			scan_chain.apply_async()
+			
+			logger.info(f'Started scheduled scan for {domain.name} (scan_id: {scan_history_id})')
+			
+		except Exception as e:
+			logger.error(f'Error executing scheduled scan for domain {domain.name}: {e}')
+			continue
+	
+	# Calculate and store next run time
+	try:
+		from croniter import croniter
+		cron = croniter(scheduled_scan.cron_expression, timezone.now())
+		scheduled_scan.next_run_at = cron.get_next(datetime)
+		scheduled_scan.save(update_fields=['next_run_at'])
+	except Exception as e:
+		logger.error(f'Error calculating next run time: {e}')
+
+
+@app.task(name='compare_scheduled_scan_baseline', bind=False, queue='initiate_scan_queue')
+def compare_scheduled_scan_baseline(scheduled_scan_id, domain_id, scan_history_id, run_id):
+	"""Compare scan results with baseline and send notification if new findings.
+	
+	Args:
+		scheduled_scan_id (int): ScheduledScan model ID.
+		domain_id (int): Domain model ID.
+		scan_history_id (int): ScanHistory model ID.
+		run_id (int): ScheduledScanRun model ID.
+	"""
+	from startScan.models import ScheduledScan, ScheduledScanBaseline, ScheduledScanRun
+	
+	try:
+		scheduled_scan = ScheduledScan.objects.get(pk=scheduled_scan_id)
+		domain = Domain.objects.get(pk=domain_id)
+		scan_history = ScanHistory.objects.get(pk=scan_history_id)
+		run = ScheduledScanRun.objects.get(pk=run_id)
+	except Exception as e:
+		logger.error(f'Error fetching objects for baseline comparison: {e}')
+		return
+	
+	logger.info(f'Comparing baseline for scheduled scan {scheduled_scan.name}, domain {domain.name}')
+	
+	# Get or create baseline for this domain
+	baseline, created = ScheduledScanBaseline.objects.get_or_create(
+		scheduled_scan=scheduled_scan,
+		domain=domain
+	)
+	
+	is_first_run = created or baseline.baseline_scan is None
+	
+	if is_first_run:
+		# First run - set baseline and send standard completion notification
+		findings = baseline.calculate_total_findings(scan_history)
+		baseline.baseline_scan = scan_history
+		baseline.baseline_findings_count = findings['total']
+		baseline.subdomains_count = findings['subdomains']
+		baseline.endpoints_count = findings['endpoints']
+		baseline.ports_count = findings['ports']
+		baseline.technologies_count = findings['technologies']
+		baseline.emails_count = findings['emails']
+		baseline.employees_count = findings['employees']
+		baseline.dorks_count = findings['dorks']
+		baseline.save()
+		
+		run.new_findings_count = findings['total']
+		run.baseline_updated = True
+		run.save()
+		
+		# Send standard scan completion notification
+		send_scheduled_scan_notification(
+			scheduled_scan,
+			domain,
+			scan_history,
+			findings['total'],
+			is_first_run=True
+		)
+		logger.info(f'First run baseline set for {domain.name}: {findings["total"]} total findings')
+	else:
+		# Subsequent run - compare with baseline
+		was_updated, new_total, findings_diff = baseline.update_baseline(scan_history)
+		
+		run.baseline_updated = was_updated
+		run.new_findings_count = max(0, findings_diff['total'])
+		run.save()
+		
+		# Only send notification if there are NEW findings (positive diff)
+		if findings_diff['total'] > 0:
+			run.notification_sent = True
+			run.save()
+			
+			send_scheduled_scan_notification(
+				scheduled_scan,
+				domain,
+				scan_history,
+				findings_diff['total'],
+				is_first_run=False,
+				findings_diff=findings_diff
+			)
+			logger.info(f'New findings detected for {domain.name}: {findings_diff["total"]} new findings')
+		else:
+			logger.info(f'No new findings for {domain.name} (diff: {findings_diff["total"]})')
+
+
+def send_scheduled_scan_notification(scheduled_scan, domain, scan_history, findings_count, is_first_run=False, findings_diff=None):
+	"""Send notification for scheduled scan completion.
+	
+	Args:
+		scheduled_scan: ScheduledScan model instance.
+		domain: Domain model instance.
+		scan_history: ScanHistory model instance.
+		findings_count: Total findings count.
+		is_first_run: Whether this is the first run (baseline setting).
+		findings_diff: Dictionary with per-category findings differences.
+	"""
+	from dashboard.models import UserPreferences
+	
+	user = scheduled_scan.created_by
+	user_prefs = UserPreferences.objects.filter(user=user).first()
+	
+	if is_first_run:
+		title = f"Scheduled Scan Baseline Set: {domain.name}"
+		message = f"Initial scan completed for {domain.name}. Baseline established with {findings_count} findings."
+		icon = "mdi-checkbox-marked-circle-outline"
+		status = "success"
+	else:
+		title = f"New Findings Detected: {domain.name}"
+		
+		# Build detailed message with breakdown
+		diff_parts = []
+		if findings_diff:
+			if findings_diff.get('subdomains', 0) > 0:
+				diff_parts.append(f"+{findings_diff['subdomains']} subdomains")
+			if findings_diff.get('endpoints', 0) > 0:
+				diff_parts.append(f"+{findings_diff['endpoints']} endpoints")
+			if findings_diff.get('ports', 0) > 0:
+				diff_parts.append(f"+{findings_diff['ports']} ports")
+			if findings_diff.get('technologies', 0) > 0:
+				diff_parts.append(f"+{findings_diff['technologies']} technologies")
+			if findings_diff.get('emails', 0) > 0:
+				diff_parts.append(f"+{findings_diff['emails']} emails")
+			if findings_diff.get('employees', 0) > 0:
+				diff_parts.append(f"+{findings_diff['employees']} employees")
+			if findings_diff.get('dorks', 0) > 0:
+				diff_parts.append(f"+{findings_diff['dorks']} dorks")
+		
+		breakdown = ", ".join(diff_parts) if diff_parts else f"+{findings_count} new findings"
+		message = f"Scheduled scan '{scheduled_scan.name}' found new findings: {breakdown}"
+		icon = "mdi-bell-ring"
+		status = "info"
+	
+	# Create in-app notification
+	try:
+		project_slug = domain.project.slug if domain.project else None
+		create_inappnotification(
+			title=title,
+			description=message,
+			notification_type=PROJECT_LEVEL_NOTIFICATION if project_slug else SYSTEM_LEVEL_NOTIFICATION,
+			project_slug=project_slug,
+			icon=icon,
+			status=status,
+			redirect_link=f"/{project_slug}/detail/{scan_history.id}" if project_slug else None
+		)
+	except Exception as e:
+		logger.error(f'Error creating in-app notification: {e}')
+	
+	# Send ntfy notification if enabled
+	if scheduled_scan.ntfy_enabled and user_prefs and user_prefs.ntfy_enabled and user_prefs.ntfy_topic:
+		tags = "white_check_mark" if is_first_run else "bell"
+		send_ntfy_message(
+			message,
+			user_prefs.ntfy_topic,
+			title=title,
+			priority='default' if is_first_run else 'high',
+			tags=tags
+		)
+	
+	# Send Discord notification if configured
+	try:
+		send_discord_message(
+			message=message,
+			title=title,
+			severity=None,
+			fields={
+				'Target': domain.name,
+				'Scan Engine': scheduled_scan.scan_engine.engine_name,
+				'Findings': str(findings_count)
+			}
+		)
+	except Exception as e:
+		logger.error(f'Error sending Discord notification: {e}')

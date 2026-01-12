@@ -4,6 +4,7 @@ from celery import group
 from weasyprint import HTML, CSS
 from datetime import datetime
 from django.contrib import messages
+from django.db import models
 from django.db.models import Count, Case, When, IntegerField
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, render
@@ -1174,3 +1175,228 @@ def create_report(request, id):
         response = HttpResponse(pdf, content_type='application/pdf')
 
     return response
+
+
+#---------------------------#
+# Scheduled Scan Views      #
+#---------------------------#
+
+
+def scheduled_scans_list(request, slug):
+    """List all scheduled scans for the current project.
+    
+    Admins see all scheduled scans, regular users only see their own.
+    """
+    from startScan.models import ScheduledScan
+    
+    # Get project
+    project = get_object_or_404(Project, slug=slug)
+    
+    # Filter scans based on user role
+    if request.user.is_superuser:
+        scheduled_scans = ScheduledScan.objects.filter(
+            models.Q(domain__project=project) | models.Q(organization__project=project)
+        ).select_related('domain', 'organization', 'scan_engine', 'created_by').order_by('-created_at')
+    else:
+        scheduled_scans = ScheduledScan.objects.filter(
+            models.Q(domain__project=project) | models.Q(organization__project=project),
+            created_by=request.user
+        ).select_related('domain', 'organization', 'scan_engine', 'created_by').order_by('-created_at')
+    
+    context = {
+        'scheduled_scans': scheduled_scans,
+        'scheduled_scan_active': 'active',
+    }
+    return render(request, 'startScan/scheduled_scans_list.html', context)
+
+
+@has_permission_decorator(PERM_INITATE_SCANS_SUBSCANS, redirect_url=FOUR_OH_FOUR_URL)
+def create_scheduled_scan(request, slug, domain_id=None, organization_id=None):
+    """Create a new scheduled scan for a domain or organization."""
+    from startScan.models import ScheduledScan
+    
+    project = get_object_or_404(Project, slug=slug)
+    domain = None
+    organization = None
+    
+    if domain_id:
+        domain = get_object_or_404(Domain, id=domain_id, project=project)
+    elif organization_id:
+        organization = get_object_or_404(Organization, id=organization_id, project=project)
+    
+    if request.method == "POST":
+        name = request.POST.get('name', '').strip()
+        cron_expression = request.POST.get('cron_expression', '').strip()
+        engine_id = request.POST.get('scan_mode')
+        ntfy_enabled = request.POST.get('ntfy_enabled') == 'on'
+        
+        # Get scan options
+        subdomains_in = request.POST.get('importSubdomainTextArea', '').split()
+        subdomains_in = [s.strip() for s in subdomains_in if s.strip()]
+        subdomains_out = request.POST.get('outOfScopeSubdomainTextarea', '').split()
+        subdomains_out = [s.strip() for s in subdomains_out if s.strip()]
+        starting_point_path = request.POST.get('startingPointPath', '').strip()
+        excluded_paths = request.POST.get('excludedPaths', '')
+        excluded_paths = [path.strip() for path in excluded_paths.split(',') if path.strip()]
+        
+        # Validate cron expression
+        try:
+            from croniter import croniter
+            croniter(cron_expression)
+        except Exception as e:
+            messages.add_message(
+                request,
+                messages.ERROR,
+                f'Invalid cron expression: {str(e)}'
+            )
+            return HttpResponseRedirect(request.path)
+        
+        # Create scheduled scan
+        try:
+            engine = get_object_or_404(EngineType, id=engine_id)
+            
+            # Calculate next run time
+            cron = croniter(cron_expression, timezone.now())
+            next_run = cron.get_next(datetime)
+            
+            scheduled_scan = ScheduledScan.objects.create(
+                name=name or f"Scheduled Scan - {domain.name if domain else organization.name}",
+                cron_expression=cron_expression,
+                domain=domain,
+                organization=organization,
+                scan_engine=engine,
+                imported_subdomains=subdomains_in,
+                out_of_scope_subdomains=subdomains_out,
+                starting_point_path=starting_point_path,
+                excluded_paths=excluded_paths,
+                created_by=request.user,
+                ntfy_enabled=ntfy_enabled,
+                next_run_at=next_run,
+                status=0  # Active
+            )
+            
+            target_name = domain.name if domain else organization.name
+            messages.add_message(
+                request,
+                messages.SUCCESS,
+                f'Scheduled scan created for {target_name}'
+            )
+            return HttpResponseRedirect(reverse('scheduled_scans_list', kwargs={'slug': slug}))
+            
+        except Exception as e:
+            messages.add_message(
+                request,
+                messages.ERROR,
+                f'Error creating scheduled scan: {str(e)}'
+            )
+            return HttpResponseRedirect(request.path)
+    
+    # GET request
+    engines = EngineType.objects.order_by('engine_name')
+    custom_engine_count = EngineType.objects.filter(default_engine=False).count()
+    excluded_paths = ','.join(DEFAULT_EXCLUDED_PATHS)
+    
+    context = {
+        'scheduled_scan_active': 'active',
+        'domain': domain,
+        'organization': organization,
+        'engines': engines,
+        'custom_engine_count': custom_engine_count,
+        'excluded_paths': excluded_paths,
+    }
+    return render(request, 'startScan/create_scheduled_scan.html', context)
+
+
+@has_permission_decorator(PERM_MODIFY_SCAN_RESULTS, redirect_url=FOUR_OH_FOUR_URL)
+def delete_scheduled_scan(request, slug, id):
+    """Delete a scheduled scan."""
+    from startScan.models import ScheduledScan
+    
+    scheduled_scan = get_object_or_404(ScheduledScan, id=id)
+    
+    # Check permission - only owner or admin can delete
+    if not request.user.is_superuser and scheduled_scan.created_by != request.user:
+        messages.add_message(
+            request,
+            messages.ERROR,
+            'You do not have permission to delete this scheduled scan'
+        )
+        return JsonResponse({'status': 'false'})
+    
+    if request.method == "POST":
+        scheduled_scan.delete()
+        messages.add_message(
+            request,
+            messages.SUCCESS,
+            'Scheduled scan deleted successfully'
+        )
+        return JsonResponse({'status': 'true'})
+    
+    return JsonResponse({'status': 'false'})
+
+
+@has_permission_decorator(PERM_INITATE_SCANS_SUBSCANS, redirect_url=FOUR_OH_FOUR_URL)
+def toggle_scheduled_scan_status(request, slug, id):
+    """Toggle a scheduled scan between active and paused."""
+    from startScan.models import ScheduledScan
+    
+    scheduled_scan = get_object_or_404(ScheduledScan, id=id)
+    
+    # Check permission - only owner or admin can toggle
+    if not request.user.is_superuser and scheduled_scan.created_by != request.user:
+        return JsonResponse({'status': 'error', 'message': 'Permission denied'})
+    
+    if request.method == "POST":
+        # Toggle between Active (0) and Paused (1)
+        if scheduled_scan.status == 0:
+            scheduled_scan.status = 1  # Pause
+            new_status = 'paused'
+        else:
+            scheduled_scan.status = 0  # Activate
+            # Recalculate next run time
+            try:
+                from croniter import croniter
+                cron = croniter(scheduled_scan.cron_expression, timezone.now())
+                scheduled_scan.next_run_at = cron.get_next(datetime)
+            except:
+                pass
+            new_status = 'active'
+        
+        scheduled_scan.save()
+        return JsonResponse({'status': 'success', 'new_status': new_status})
+    
+    return JsonResponse({'status': 'error'})
+
+
+def scheduled_scan_detail(request, slug, id):
+    """View scheduled scan details and run history."""
+    from startScan.models import ScheduledScan, ScheduledScanRun, ScheduledScanBaseline
+    
+    scheduled_scan = get_object_or_404(ScheduledScan, id=id)
+    
+    # Check permission - only owner or admin can view
+    if not request.user.is_superuser and scheduled_scan.created_by != request.user:
+        messages.add_message(
+            request,
+            messages.ERROR,
+            'You do not have permission to view this scheduled scan'
+        )
+        return HttpResponseRedirect(reverse('scheduled_scans_list', kwargs={'slug': slug}))
+    
+    # Get run history
+    runs = ScheduledScanRun.objects.filter(
+        scheduled_scan=scheduled_scan
+    ).select_related('scan_history').order_by('-started_at')[:50]
+    
+    # Get baselines
+    baselines = ScheduledScanBaseline.objects.filter(
+        scheduled_scan=scheduled_scan
+    ).select_related('domain', 'baseline_scan')
+    
+    context = {
+        'scheduled_scan': scheduled_scan,
+        'runs': runs,
+        'baselines': baselines,
+        'scheduled_scan_active': 'active',
+    }
+    return render(request, 'startScan/scheduled_scan_detail.html', context)

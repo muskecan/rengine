@@ -14,6 +14,31 @@ urlpatterns = [
         '<slug:slug>/scheduled/',
         views.scheduled_scan_view,
         name="scheduled_scan_view"),
+    # New cron-based scheduled scans
+    path(
+        '<slug:slug>/scheduled-scans/',
+        views.scheduled_scans_list,
+        name="scheduled_scans_list"),
+    path(
+        '<slug:slug>/scheduled-scans/create/domain/<int:domain_id>/',
+        views.create_scheduled_scan,
+        name="create_scheduled_scan_domain"),
+    path(
+        '<slug:slug>/scheduled-scans/create/organization/<int:organization_id>/',
+        views.create_scheduled_scan,
+        name="create_scheduled_scan_organization"),
+    path(
+        '<slug:slug>/scheduled-scans/<int:id>/',
+        views.scheduled_scan_detail,
+        name="scheduled_scan_detail"),
+    path(
+        '<slug:slug>/scheduled-scans/<int:id>/delete/',
+        views.delete_scheduled_scan,
+        name="delete_scheduled_scan"),
+    path(
+        '<slug:slug>/scheduled-scans/<int:id>/toggle/',
+        views.toggle_scheduled_scan_status,
+        name="toggle_scheduled_scan_status"),
     path(
         '<slug:slug>/detail/<int:id>',
         views.detail_scan,

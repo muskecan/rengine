@@ -1,3 +1,4 @@
+from datetime import datetime
 from urllib.parse import urlparse
 from django.apps import apps
 from django.contrib.auth.models import User
@@ -684,3 +685,296 @@ class S3Bucket(models.Model):
 	perm_all_users_full_control = models.IntegerField(default=0)
 	num_objects = models.IntegerField(default=0)
 	size = models.IntegerField(default=0)
+
+
+# Scheduled Scan Status Choices
+SCHEDULED_SCAN_STATUS = (
+	(0, 'Active'),
+	(1, 'Paused'),
+	(2, 'Stopped'),
+)
+
+
+class ScheduledScan(models.Model):
+	"""Model for cron-based scheduled scans with baseline comparison.
+	
+	This model stores scheduled scan configurations that run periodically
+	based on cron expressions. It supports both single targets and organization-wide
+	scanning, with intelligent notification that only alerts on new findings.
+	"""
+	id = models.AutoField(primary_key=True)
+	name = models.CharField(max_length=500, help_text="Descriptive name for this scheduled scan")
+	
+	# Scheduling
+	cron_expression = models.CharField(
+		max_length=100,
+		help_text="Cron expression (e.g., '0 2 * * *' for daily at 2 AM)"
+	)
+	
+	# Target configuration - either single domain or organization (for multiple targets)
+	domain = models.ForeignKey(
+		Domain,
+		on_delete=models.CASCADE,
+		null=True,
+		blank=True,
+		related_name='scheduled_scans',
+		help_text="Single target domain (leave empty if scanning organization)"
+	)
+	organization = models.ForeignKey(
+		'targetApp.Organization',
+		on_delete=models.CASCADE,
+		null=True,
+		blank=True,
+		related_name='scheduled_scans',
+		help_text="Organization for multi-target scanning"
+	)
+	
+	# Scan configuration
+	scan_engine = models.ForeignKey(
+		EngineType,
+		on_delete=models.CASCADE,
+		related_name='scheduled_scans'
+	)
+	
+	# Scan options (same as regular scan)
+	imported_subdomains = ArrayField(
+		models.CharField(max_length=200),
+		blank=True,
+		null=True,
+		default=list
+	)
+	out_of_scope_subdomains = ArrayField(
+		models.CharField(max_length=200),
+		blank=True,
+		null=True,
+		default=list
+	)
+	starting_point_path = models.CharField(max_length=200, blank=True, null=True)
+	excluded_paths = ArrayField(
+		models.CharField(max_length=200),
+		blank=True,
+		null=True,
+		default=list
+	)
+	
+	# Ownership and permissions
+	created_by = models.ForeignKey(
+		User,
+		on_delete=models.CASCADE,
+		related_name='created_scheduled_scans'
+	)
+	
+	# Status
+	status = models.IntegerField(choices=SCHEDULED_SCAN_STATUS, default=0)
+	
+	# Timestamps
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+	last_run_at = models.DateTimeField(null=True, blank=True)
+	next_run_at = models.DateTimeField(null=True, blank=True)
+	
+	# Run statistics
+	total_runs = models.IntegerField(default=0)
+	
+	# Notification settings
+	ntfy_enabled = models.BooleanField(default=False)
+	
+	class Meta:
+		ordering = ['-created_at']
+		verbose_name = 'Scheduled Scan'
+		verbose_name_plural = 'Scheduled Scans'
+
+	def __str__(self):
+		target = self.domain.name if self.domain else (self.organization.name if self.organization else 'Unknown')
+		return f"{self.name} - {target}"
+
+	def get_targets(self):
+		"""Get all target domains for this scheduled scan."""
+		if self.domain:
+			return [self.domain]
+		elif self.organization:
+			return list(self.organization.get_domains())
+		return []
+
+	def get_status_display_class(self):
+		"""Get CSS class for status display."""
+		status_classes = {
+			0: 'success',  # Active
+			1: 'warning',  # Paused
+			2: 'danger',   # Stopped
+		}
+		return status_classes.get(self.status, 'secondary')
+
+	def is_active(self):
+		return self.status == 0
+
+	def calculate_next_run(self):
+		"""Calculate next run time based on cron expression."""
+		from croniter import croniter
+		cron = croniter(self.cron_expression, timezone.now())
+		return cron.get_next(datetime)
+
+
+class ScheduledScanBaseline(models.Model):
+	"""Stores baseline findings count per target for comparison.
+	
+	This model tracks the "best" scan (with most findings) for each target
+	in a scheduled scan. New scans are compared against this baseline to
+	determine if new findings were discovered.
+	"""
+	id = models.AutoField(primary_key=True)
+	scheduled_scan = models.ForeignKey(
+		ScheduledScan,
+		on_delete=models.CASCADE,
+		related_name='baselines'
+	)
+	domain = models.ForeignKey(
+		Domain,
+		on_delete=models.CASCADE,
+		related_name='scheduled_scan_baselines'
+	)
+	
+	# Reference to the scan with most findings
+	baseline_scan = models.ForeignKey(
+		ScanHistory,
+		on_delete=models.SET_NULL,
+		null=True,
+		blank=True,
+		related_name='baseline_for'
+	)
+	
+	# Cached findings count (excluding vulnerabilities)
+	# This includes: subdomains, endpoints, ports, technologies, emails, etc.
+	baseline_findings_count = models.IntegerField(default=0)
+	
+	# Breakdown of findings (for detailed comparison)
+	subdomains_count = models.IntegerField(default=0)
+	endpoints_count = models.IntegerField(default=0)
+	ports_count = models.IntegerField(default=0)
+	technologies_count = models.IntegerField(default=0)
+	emails_count = models.IntegerField(default=0)
+	employees_count = models.IntegerField(default=0)
+	dorks_count = models.IntegerField(default=0)
+	
+	# Timestamps
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		unique_together = ['scheduled_scan', 'domain']
+		verbose_name = 'Scheduled Scan Baseline'
+		verbose_name_plural = 'Scheduled Scan Baselines'
+
+	def __str__(self):
+		return f"Baseline for {self.domain.name} in {self.scheduled_scan.name}"
+
+	def calculate_total_findings(self, scan_history):
+		"""Calculate total findings count for a scan (excluding vulnerabilities).
+		
+		Args:
+			scan_history: ScanHistory object to calculate findings for.
+			
+		Returns:
+			dict: Dictionary with individual counts and total.
+		"""
+		subdomains = Subdomain.objects.filter(scan_history=scan_history).count()
+		endpoints = EndPoint.objects.filter(scan_history=scan_history).count()
+		
+		# Count unique ports from IP addresses associated with subdomains
+		subdomain_ids = Subdomain.objects.filter(scan_history=scan_history).values_list('id', flat=True)
+		ip_addresses = IpAddress.objects.filter(ip_addresses__in=subdomain_ids)
+		ports = Port.objects.filter(ports__in=ip_addresses).distinct().count()
+		
+		# Technologies from subdomains
+		technologies = Technology.objects.filter(technologies__in=subdomain_ids).distinct().count()
+		
+		# OSINT findings
+		emails = Email.objects.filter(emails__in=[scan_history]).count()
+		employees = Employee.objects.filter(employees__in=[scan_history]).count()
+		dorks = Dork.objects.filter(dorks__in=[scan_history]).count()
+		
+		total = subdomains + endpoints + ports + technologies + emails + employees + dorks
+		
+		return {
+			'subdomains': subdomains,
+			'endpoints': endpoints,
+			'ports': ports,
+			'technologies': technologies,
+			'emails': emails,
+			'employees': employees,
+			'dorks': dorks,
+			'total': total
+		}
+
+	def update_baseline(self, scan_history):
+		"""Update baseline if the new scan has more findings.
+		
+		Args:
+			scan_history: ScanHistory object to compare and potentially use as new baseline.
+			
+		Returns:
+			tuple: (was_updated: bool, new_findings_count: int, findings_diff: dict)
+		"""
+		findings = self.calculate_total_findings(scan_history)
+		new_total = findings['total']
+		
+		# Calculate difference from current baseline
+		findings_diff = {
+			'subdomains': findings['subdomains'] - self.subdomains_count,
+			'endpoints': findings['endpoints'] - self.endpoints_count,
+			'ports': findings['ports'] - self.ports_count,
+			'technologies': findings['technologies'] - self.technologies_count,
+			'emails': findings['emails'] - self.emails_count,
+			'employees': findings['employees'] - self.employees_count,
+			'dorks': findings['dorks'] - self.dorks_count,
+			'total': new_total - self.baseline_findings_count
+		}
+		
+		# Check if this scan has more findings than current baseline
+		if new_total > self.baseline_findings_count:
+			self.baseline_scan = scan_history
+			self.baseline_findings_count = new_total
+			self.subdomains_count = findings['subdomains']
+			self.endpoints_count = findings['endpoints']
+			self.ports_count = findings['ports']
+			self.technologies_count = findings['technologies']
+			self.emails_count = findings['emails']
+			self.employees_count = findings['employees']
+			self.dorks_count = findings['dorks']
+			self.save()
+			return True, new_total, findings_diff
+		
+		return False, new_total, findings_diff
+
+
+class ScheduledScanRun(models.Model):
+	"""Tracks individual runs of a scheduled scan for history."""
+	id = models.AutoField(primary_key=True)
+	scheduled_scan = models.ForeignKey(
+		ScheduledScan,
+		on_delete=models.CASCADE,
+		related_name='runs'
+	)
+	scan_history = models.ForeignKey(
+		ScanHistory,
+		on_delete=models.CASCADE,
+		related_name='scheduled_run'
+	)
+	
+	# Was baseline updated after this run?
+	baseline_updated = models.BooleanField(default=False)
+	
+	# New findings discovered in this run
+	new_findings_count = models.IntegerField(default=0)
+	
+	# Notification sent?
+	notification_sent = models.BooleanField(default=False)
+	
+	# Timestamps
+	started_at = models.DateTimeField(auto_now_add=True)
+	
+	class Meta:
+		ordering = ['-started_at']
+
+	def __str__(self):
+		return f"Run #{self.id} for {self.scheduled_scan.name}"
