@@ -23,6 +23,7 @@ from reNgine.tasks import create_scan_activity, initiate_scan, run_command
 from scanEngine.models import EngineType
 from startScan.models import *
 from targetApp.models import *
+from dashboard.models import Project
 
 
 def scan_history(request, slug):
