@@ -245,16 +245,24 @@ function toggleScheduledScan(id, checkbox) {
 }
 
 function deleteScheduledScan(id) {
-  swal({
+  Swal.fire({
     title: 'Delete Scheduled Scan?',
     text: "This action cannot be undone.",
-    type: 'warning',
+    icon: 'warning',
     showCancelButton: true,
     confirmButtonText: 'Delete',
-    padding: '2em',
-    showLoaderOnConfirm: true,
-    preConfirm: function() {
-      return fetch(`/scan/{{ current_project.slug }}/scheduled-scans/${id}/delete/`, {
+    confirmButtonColor: '#e7515a',
+    cancelButtonText: 'Cancel',
+  }).then((result) => {
+    if (result.isConfirmed) {
+      Swal.fire({
+        title: 'Deleting...',
+        allowOutsideClick: false,
+        showConfirmButton: false,
+      });
+      Swal.showLoading();
+      
+      fetch(`/scan/{{ current_project.slug }}/scheduled-scans/${id}/delete/`, {
         method: 'POST',
         headers: {
           'X-CSRFToken': getCookie('csrftoken'),
@@ -263,10 +271,26 @@ function deleteScheduledScan(id) {
       .then(response => response.json())
       .then(data => {
         if (data.status === 'true') {
-          location.reload();
+          Swal.fire({
+            title: 'Deleted!',
+            icon: 'success',
+            timer: 1500,
+            showConfirmButton: false,
+          }).then(() => location.reload());
         } else {
-          throw new Error('Delete failed');
+          Swal.fire({
+            title: 'Error!',
+            text: 'Could not delete scheduled scan.',
+            icon: 'error',
+          });
         }
+      })
+      .catch(error => {
+        Swal.fire({
+          title: 'Error!',
+          text: 'An error occurred.',
+          icon: 'error',
+        });
       });
     }
   });
@@ -275,25 +299,31 @@ function deleteScheduledScan(id) {
 function deleteMultipleScheduledScans() {
   var checkedCount = $(".scheduled_scan_checkbox:checked").length;
   if (!checkedCount) {
-    swal({
-      title: '',
+    Swal.fire({
+      title: 'Oops!',
       text: "Please select at least one scheduled scan to delete.",
-      type: 'error',
-      padding: '2em'
+      icon: 'error',
     });
     return;
   }
   
-  swal({
+  Swal.fire({
     title: `Delete ${checkedCount} Scheduled Scan(s)?`,
     text: "This action cannot be undone.",
-    type: 'warning',
+    icon: 'warning',
     showCancelButton: true,
     confirmButtonText: 'Delete',
-    padding: '2em',
-    showLoaderOnConfirm: true,
-    preConfirm: function() {
-      // Delete each selected scan
+    confirmButtonColor: '#e7515a',
+    cancelButtonText: 'Cancel',
+  }).then((result) => {
+    if (result.isConfirmed) {
+      Swal.fire({
+        title: 'Deleting...',
+        allowOutsideClick: false,
+        showConfirmButton: false,
+      });
+      Swal.showLoading();
+      
       var promises = [];
       $(".scheduled_scan_checkbox:checked").each(function() {
         var id = $(this).val();
@@ -306,7 +336,23 @@ function deleteMultipleScheduledScans() {
           })
         );
       });
-      return Promise.all(promises).then(() => location.reload());
+      
+      Promise.all(promises)
+        .then(() => {
+          Swal.fire({
+            title: 'Deleted!',
+            icon: 'success',
+            timer: 1500,
+            showConfirmButton: false,
+          }).then(() => location.reload());
+        })
+        .catch(error => {
+          Swal.fire({
+            title: 'Error!',
+            text: 'Some scans could not be deleted.',
+            icon: 'error',
+          });
+        });
     }
   });
 }

@@ -301,16 +301,24 @@ function toggleStatus() {
 }
 
 function deleteScheduledScan() {
-  swal({
+  Swal.fire({
     title: 'Delete Scheduled Scan?',
     text: "This will delete the scheduled scan and all its history. This action cannot be undone.",
-    type: 'warning',
+    icon: 'warning',
     showCancelButton: true,
     confirmButtonText: 'Delete',
-    padding: '2em',
-    showLoaderOnConfirm: true,
-    preConfirm: function() {
-      return fetch('{% url "delete_scheduled_scan" current_project.slug scheduled_scan.id %}', {
+    confirmButtonColor: '#e7515a',
+    cancelButtonText: 'Cancel',
+  }).then((result) => {
+    if (result.isConfirmed) {
+      Swal.fire({
+        title: 'Deleting...',
+        allowOutsideClick: false,
+        showConfirmButton: false,
+      });
+      Swal.showLoading();
+      
+      fetch('{% url "delete_scheduled_scan" current_project.slug scheduled_scan.id %}', {
         method: 'POST',
         headers: {
           'X-CSRFToken': getCookie('csrftoken'),
@@ -319,10 +327,27 @@ function deleteScheduledScan() {
       .then(response => response.json())
       .then(data => {
         if (data.status === 'true') {
-          window.location.href = '{% url "scheduled_scans_list" current_project.slug %}';
+          Swal.fire({
+            title: 'Deleted!',
+            text: 'Scheduled scan has been deleted.',
+            icon: 'success',
+          }).then(() => {
+            window.location.href = '{% url "scheduled_scans_list" current_project.slug %}';
+          });
         } else {
-          throw new Error('Delete failed');
+          Swal.fire({
+            title: 'Error!',
+            text: 'Could not delete scheduled scan.',
+            icon: 'error',
+          });
         }
+      })
+      .catch(error => {
+        Swal.fire({
+          title: 'Error!',
+          text: 'An error occurred while deleting.',
+          icon: 'error',
+        });
       });
     }
   });
