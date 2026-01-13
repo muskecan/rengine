@@ -115,6 +115,19 @@
           {% if domain_ids %}
           <input type="hidden" name="domain_ids" value="{{domain_ids}}">
           {% endif %}
+          
+          <!-- Start Scan Button (visible alternative to wizard finish button) -->
+          <div class="mt-4 pt-3 border-top">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <h5 class="mb-1"><i class="fe-play-circle me-1 text-success"></i> Ready to Scan?</h5>
+                <small class="text-muted">Select a scan engine above and click Start Scan</small>
+              </div>
+              <button type="submit" class="btn btn-success btn-lg" id="start-scan-btn">
+                <i class="fe-play me-1"></i> Start Scan
+              </button>
+            </div>
+          </div>
         </form>
         
         <!-- Schedule Scan Option -->

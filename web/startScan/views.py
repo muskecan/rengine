@@ -1277,11 +1277,24 @@ def create_scheduled_scan(request, slug, domain_id=None, organization_id=None):
             )
             
             target_name = domain.name if domain else organization.name
-            messages.add_message(
-                request,
-                messages.SUCCESS,
-                f'Scheduled scan created for {target_name}'
-            )
+            
+            # Check if user wants to run immediately
+            run_immediately = request.POST.get('run_immediately') == 'on'
+            if run_immediately:
+                # Import and trigger the execute_scheduled_scan task
+                from reNgine.tasks import execute_scheduled_scan
+                execute_scheduled_scan.delay(scheduled_scan.id)
+                messages.add_message(
+                    request,
+                    messages.SUCCESS,
+                    f'Scheduled scan created for {target_name} — First scan started immediately!'
+                )
+            else:
+                messages.add_message(
+                    request,
+                    messages.SUCCESS,
+                    f'Scheduled scan created for {target_name}'
+                )
             return HttpResponseRedirect(reverse('scheduled_scans_list', kwargs={'slug': slug}))
             
         except Exception as e:
