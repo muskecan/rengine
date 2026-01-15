@@ -486,7 +486,8 @@ def subdomain_discovery(
 
 			elif tool == 'ctfr':
 				results_file = self.results_dir + '/subdomains_ctfr.txt'
-				cmd = f'python3 /usr/src/github/ctfr/ctfr.py -d {host} -o {results_file}'
+				# Touch file first to ensure it exists even if ctfr finds no results
+				cmd = f'touch {results_file} && python3 /usr/src/github/ctfr/ctfr.py -d {host} -o {results_file}'
 				# Clean ctfr output: remove [-] prefix (with 1-2 spaces), remove *. wildcards, keep only valid subdomains
 				host_escaped = host.replace('.', '\\.')
 				cmd_extract = f"cat {results_file} | sed 's/^\\[-\\] *//' | sed 's/^\\*\\.//' | sed 's/^\\*//' | sed 's/^\\.//' | grep -v '^\\[' | grep -v '^$' | grep -E '^[a-zA-Z0-9][a-zA-Z0-9.-]*{host_escaped}$' | sort -u > {results_file}.tmp && mv {results_file}.tmp {results_file}"
@@ -1197,6 +1198,11 @@ def h8mail(config, host, scan_history_id, activity_id, results_dir, ctx={}):
 	scan_history = ScanHistory.objects.get(pk=scan_history_id)
 	input_path = f'{results_dir}/emails.txt'
 	output_file = f'{results_dir}/h8mail.json'
+
+	# Check if input file exists and has content before running h8mail
+	if not os.path.isfile(input_path) or os.path.getsize(input_path) == 0:
+		logger.info('No emails found, skipping h8mail')
+		return []
 
 	cmd = f'h8mail -t {input_path} --json {output_file}'
 	history_file = f'{results_dir}/commands.txt'
@@ -1996,8 +2002,9 @@ def fetch_url(self, urls=[], ctx={}, description=None):
 		cmd_map['katana'] += f' {formatted_headers}'
 	cat_input = f'cat {input_path}'
 	grep_output = f'grep -Eo {host_regex}'
+	# Add || true to prevent grep exit code 1 when no matches found
 	cmd_map = {
-		tool: f'{cat_input} | {cmd} | {grep_output} > {self.results_dir}/urls_{tool}.txt'
+		tool: f'{cat_input} | {cmd} | {grep_output} > {self.results_dir}/urls_{tool}.txt || true'
 		for tool, cmd in cmd_map.items()
 	}
 	tasks = group(
@@ -2113,7 +2120,8 @@ def fetch_url(self, urls=[], ctx={}, description=None):
 		# Run gf on current pattern
 		logger.warning(f'Running gf on pattern "{gf_pattern}"')
 		gf_output_file = f'{self.results_dir}/gf_patterns_{gf_pattern}.txt'
-		cmd = f'cat {self.output_path} | gf {gf_pattern} | grep -Eo {host_regex} >> {gf_output_file}'
+		# Add || true to prevent grep exit code 1 when no matches found
+		cmd = f'cat {self.output_path} | gf {gf_pattern} | grep -Eo {host_regex} >> {gf_output_file} || true'
 		run_command(
 			cmd,
 			shell=True,
