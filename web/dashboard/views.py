@@ -339,6 +339,11 @@ def onboarding(request):
         key_chaos = request.POST.get('key_chaos')
         key_hackerone = request.POST.get('key_hackerone')
         username_hackerone = request.POST.get('username_hackerone')
+        key_c99 = request.POST.get('key_c99')
+        key_hunter = request.POST.get('key_hunter')
+        key_dehashed = request.POST.get('key_dehashed')
+        email_dehashed = request.POST.get('email_dehashed')
+        key_shodan = request.POST.get('key_shodan')
         bug_bounty_mode = request.POST.get('bug_bounty_mode') == 'on'
         ntfy_enabled = request.POST.get('ntfy_enabled') == 'on'
         ntfy_include_domain = request.POST.get('ntfy_include_domain') == 'on'
@@ -417,6 +422,42 @@ def onboarding(request):
                     key=key_hackerone
                 )
 
+        if key_c99:
+            c99_api_key = C99APIKey.objects.first()
+            if c99_api_key:
+                c99_api_key.key = key_c99
+                c99_api_key.save()
+            else:
+                C99APIKey.objects.create(key=key_c99)
+
+        if key_hunter:
+            hunter_api_key = HunterIOAPIKey.objects.first()
+            if hunter_api_key:
+                hunter_api_key.key = key_hunter
+                hunter_api_key.save()
+            else:
+                HunterIOAPIKey.objects.create(key=key_hunter)
+
+        if key_dehashed and email_dehashed:
+            dehashed_api_key = DehashedAPIKey.objects.first()
+            if dehashed_api_key:
+                dehashed_api_key.email = email_dehashed
+                dehashed_api_key.key = key_dehashed
+                dehashed_api_key.save()
+            else:
+                DehashedAPIKey.objects.create(
+                    email=email_dehashed,
+                    key=key_dehashed
+                )
+
+        if key_shodan:
+            shodan_api_key = ShodanAPIKey.objects.first()
+            if shodan_api_key:
+                shodan_api_key.key = key_shodan
+                shodan_api_key.save()
+            else:
+                ShodanAPIKey.objects.create(key=key_shodan)
+
     context['error'] = error
     
 
@@ -425,6 +466,12 @@ def onboarding(request):
     context['chaos_key'] = ChaosAPIKey.objects.first()
     context['hackerone_key'] = HackerOneAPIKey.objects.first().key if HackerOneAPIKey.objects.first() else ''
     context['hackerone_username'] = HackerOneAPIKey.objects.first().username if HackerOneAPIKey.objects.first() else ''
+    context['c99_key'] = C99APIKey.objects.first().key if C99APIKey.objects.first() else ''
+    context['hunter_key'] = HunterIOAPIKey.objects.first().key if HunterIOAPIKey.objects.first() else ''
+    dehashed_obj = DehashedAPIKey.objects.first()
+    context['dehashed_key'] = dehashed_obj.key if dehashed_obj else ''
+    context['dehashed_email'] = dehashed_obj.email if dehashed_obj else ''
+    context['shodan_key'] = ShodanAPIKey.objects.first().key if ShodanAPIKey.objects.first() else ''
 
     context['user_preferences'], _ = UserPreferences.objects.get_or_create(
         user=request.user

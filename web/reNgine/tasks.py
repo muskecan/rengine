@@ -445,6 +445,11 @@ def subdomain_discovery(
 	# Make exception for amass since tool name is amass, but command is amass-active/passive
 	default_subdomain_tools.append('amass-passive')
 	default_subdomain_tools.append('amass-active')
+	# API-based tools for subdomain discovery
+	default_subdomain_tools.append('c99')
+	default_subdomain_tools.append('securitytrails')
+	default_subdomain_tools.append('virustotal')
+	default_subdomain_tools.append('censys')
 
 	# Run tools
 	for tool in tools:
@@ -515,6 +520,141 @@ def subdomain_discovery(
 					continue
 				results_file = self.results_dir + '/subdomains_chaos.txt'
 				cmd = f'chaos -d {host} -silent -key {chaos_key} -o {results_file}'
+
+			elif tool == 'c99':
+				# c99.nl subdomain API
+				c99_key = get_c99_key()
+				if not c99_key:
+					logger.error('c99.nl API key not found. Skipping.')
+					continue
+				results_file = self.results_dir + '/subdomains_c99.txt'
+				try:
+					api_url = f'https://api.c99.nl/subdomainfinder?key={c99_key}&domain={host}&json'
+					response = requests.get(api_url, timeout=60)
+					if response.status_code == 200:
+						data = response.json()
+						if data.get('success') and data.get('subdomains'):
+							subdomains_found = [s.get('subdomain', '') for s in data['subdomains'] if s.get('subdomain')]
+							with open(results_file, 'w') as f:
+								f.write('\n'.join(subdomains_found))
+							logger.info(f'c99.nl found {len(subdomains_found)} subdomains for {host}')
+						else:
+							logger.warning(f'c99.nl returned no subdomains for {host}')
+							# Touch the file to avoid cat errors later
+							open(results_file, 'w').close()
+					else:
+						logger.error(f'c99.nl API returned status {response.status_code}')
+						open(results_file, 'w').close()
+				except Exception as e:
+					logger.error(f'c99.nl API error: {e}')
+					open(results_file, 'w').close()
+				continue  # No shell command to run, already handled via API
+
+			elif tool == 'securitytrails':
+				# SecurityTrails subdomain API
+				securitytrails_key = get_securitytrails_key()
+				if not securitytrails_key:
+					logger.error('SecurityTrails API key not found. Skipping.')
+					continue
+				results_file = self.results_dir + '/subdomains_securitytrails.txt'
+				try:
+					api_url = f'https://api.securitytrails.com/v1/domain/{host}/subdomains'
+					headers = {'APIKEY': securitytrails_key, 'Accept': 'application/json'}
+					response = requests.get(api_url, headers=headers, timeout=60)
+					if response.status_code == 200:
+						data = response.json()
+						subdomains_found = data.get('subdomains', [])
+						if subdomains_found:
+							# Append domain to each subdomain
+							full_subdomains = [f'{sub}.{host}' for sub in subdomains_found]
+							with open(results_file, 'w') as f:
+								f.write('\n'.join(full_subdomains))
+							logger.info(f'SecurityTrails found {len(full_subdomains)} subdomains for {host}')
+						else:
+							logger.warning(f'SecurityTrails returned no subdomains for {host}')
+							open(results_file, 'w').close()
+					else:
+						logger.error(f'SecurityTrails API returned status {response.status_code}')
+						open(results_file, 'w').close()
+				except Exception as e:
+					logger.error(f'SecurityTrails API error: {e}')
+					open(results_file, 'w').close()
+				continue
+
+			elif tool == 'virustotal':
+				# VirusTotal passive DNS for subdomains
+				vt_key = get_virustotal_key()
+				if not vt_key:
+					logger.error('VirusTotal API key not found. Skipping.')
+					continue
+				results_file = self.results_dir + '/subdomains_virustotal.txt'
+				try:
+					api_url = f'https://www.virustotal.com/api/v3/domains/{host}/subdomains?limit=100'
+					headers = {'x-apikey': vt_key, 'Accept': 'application/json'}
+					subdomains_found = set()
+					while api_url:
+						response = requests.get(api_url, headers=headers, timeout=60)
+						if response.status_code == 200:
+							data = response.json()
+							for item in data.get('data', []):
+								subdomain = item.get('id', '')
+								if subdomain:
+									subdomains_found.add(subdomain)
+							# Get next page if available (pagination)
+							api_url = data.get('links', {}).get('next')
+						else:
+							logger.error(f'VirusTotal API returned status {response.status_code}')
+							break
+					if subdomains_found:
+						with open(results_file, 'w') as f:
+							f.write('\n'.join(subdomains_found))
+						logger.info(f'VirusTotal found {len(subdomains_found)} subdomains for {host}')
+					else:
+						logger.warning(f'VirusTotal returned no subdomains for {host}')
+						open(results_file, 'w').close()
+				except Exception as e:
+					logger.error(f'VirusTotal API error: {e}')
+					open(results_file, 'w').close()
+				continue
+
+			elif tool == 'censys':
+				# Censys certificate search for subdomains
+				censys_creds = get_censys_credentials()
+				if not censys_creds:
+					logger.error('Censys API credentials not found. Skipping.')
+					continue
+				results_file = self.results_dir + '/subdomains_censys.txt'
+				try:
+					api_url = 'https://search.censys.io/api/v2/certificates/search'
+					auth = (censys_creds[0], censys_creds[1])
+					headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
+					# Search for certificates containing the domain
+					query = f'names: {host}'
+					payload = {'q': query, 'per_page': 100}
+					subdomains_found = set()
+					response = requests.post(api_url, auth=auth, headers=headers, json=payload, timeout=60)
+					if response.status_code == 200:
+						data = response.json()
+						for hit in data.get('result', {}).get('hits', []):
+							names = hit.get('names', [])
+							for name in names:
+								# Filter to only include subdomains of the target
+								if name.endswith(f'.{host}') or name == host:
+									subdomains_found.add(name.lstrip('*.'))
+						if subdomains_found:
+							with open(results_file, 'w') as f:
+								f.write('\n'.join(subdomains_found))
+							logger.info(f'Censys found {len(subdomains_found)} subdomains for {host}')
+						else:
+							logger.warning(f'Censys returned no subdomains for {host}')
+							open(results_file, 'w').close()
+					else:
+						logger.error(f'Censys API returned status {response.status_code}')
+						open(results_file, 'w').close()
+				except Exception as e:
+					logger.error(f'Censys API error: {e}')
+					open(results_file, 'w').close()
+				continue
 
 		elif tool in custom_subdomain_tools:
 			tool_query = InstalledExternalTool.objects.filter(name__icontains=tool.lower())
@@ -748,6 +888,54 @@ def osint_discovery(config, host, scan_history_id, activity_id, results_dir, ctx
 
 	grouped_tasks = []
 
+	# Hunter.io for professional email discovery - only if API key is configured
+	if 'hunter_io' in osint_lookup:
+		if get_hunter_key():
+			logger.info(f'osint_discovery: Adding hunter.io task for {host}')
+			_task = hunter_io.si(
+				config=config,
+				host=host,
+				scan_history_id=scan_history_id,
+				activity_id=activity_id,
+				results_dir=results_dir,
+				ctx=ctx
+			)
+			grouped_tasks.append(_task)
+		else:
+			logger.info(f'osint_discovery: Skipping hunter.io - no API key configured')
+
+	# Dehashed for leaked credential lookup - only if API key is configured
+	if 'dehashed' in osint_lookup:
+		if get_dehashed_credentials():
+			logger.info(f'osint_discovery: Adding dehashed task for {host}')
+			_task = dehashed.si(
+				config=config,
+				host=host,
+				scan_history_id=scan_history_id,
+				activity_id=activity_id,
+				results_dir=results_dir,
+				ctx=ctx
+			)
+			grouped_tasks.append(_task)
+		else:
+			logger.info(f'osint_discovery: Skipping dehashed - no API credentials configured')
+
+	# HIBP for breach checking - only if API key is configured
+	if 'hibp' in osint_lookup:
+		if get_hibp_key():
+			logger.info(f'osint_discovery: Adding HIBP task for {host}')
+			_task = hibp_breach_check.si(
+				config=config,
+				host=host,
+				scan_history_id=scan_history_id,
+				activity_id=activity_id,
+				results_dir=results_dir,
+				ctx=ctx
+			)
+			grouped_tasks.append(_task)
+		else:
+			logger.info(f'osint_discovery: Skipping HIBP - no API key configured')
+
 	if 'emails' in osint_lookup:
 		logger.info(f'osint_discovery: Adding h8mail task for {host}')
 		_task = h8mail.si(
@@ -779,6 +967,18 @@ def osint_discovery(config, host, scan_history_id, activity_id, results_dir, ctx
 	while not job.ready():
 		# wait for all jobs to complete
 		time.sleep(5)
+
+	# Deduplicate emails.txt after all OSINT tasks complete
+	emails_file = f'{results_dir}/emails.txt'
+	if os.path.exists(emails_file):
+		try:
+			with open(emails_file, 'r') as f:
+				emails = set(line.strip().lower() for line in f if line.strip())
+			with open(emails_file, 'w') as f:
+				f.write('\n'.join(sorted(emails)))
+			logger.info(f'osint_discovery: Deduplicated emails.txt ({len(emails)} unique emails)')
+		except Exception as e:
+			logger.error(f'osint_discovery: Error deduplicating emails: {e}')
 
 	# results['emails'] = results.get('emails', []) + emails
 	# results['creds'] = creds
@@ -1237,6 +1437,644 @@ def h8mail(config, host, scan_history_id, activity_id, results_dir, ctx={}):
 		# if email:
 		# 	self.notify(fields={'Emails': f'• `{email.address}`'})
 	return creds
+
+
+@app.task(name='hunter_io', queue='osint_discovery_queue', bind=False)
+def hunter_io(config, host, scan_history_id, activity_id, results_dir, ctx={}):
+	"""Run hunter.io email discovery.
+
+	Args:
+		config (dict): yaml_configuration
+		host (str): target domain name
+		scan_history_id (startScan.ScanHistory): Scan History ID
+		activity_id: ScanActivity ID
+		results_dir (str): Path to store scan results
+		ctx (dict): context of scan
+
+	Returns:
+		list[dict]: List of discovered emails with metadata.
+	"""
+	logger.info(f'hunter_io: Starting email discovery for {host}')
+	scan_history = ScanHistory.objects.get(pk=scan_history_id)
+	output_file = f'{results_dir}/hunter_io.json'
+	emails_file = f'{results_dir}/emails.txt'
+
+	hunter_key = get_hunter_key()
+	if not hunter_key:
+		logger.error('hunter.io API key not found. Skipping.')
+		return []
+
+	try:
+		# Hunter.io domain-search API
+		api_url = f'https://api.hunter.io/v2/domain-search?domain={host}&api_key={hunter_key}'
+		response = requests.get(api_url, timeout=60)
+		
+		if response.status_code != 200:
+			logger.error(f'hunter.io API returned status {response.status_code}: {response.text}')
+			return []
+
+		data = response.json()
+		
+		# Save raw response
+		with open(output_file, 'w') as f:
+			json.dump(data, f, indent=4)
+
+		emails_found = []
+		if data.get('data', {}).get('emails'):
+			for email_data in data['data']['emails']:
+				email_address = email_data.get('value')
+				if email_address:
+					emails_found.append(email_address)
+					# Save email to database
+					email, _ = save_email(email_address, scan_history=scan_history)
+					
+					# Also save as employee if we have name info
+					first_name = email_data.get('first_name', '')
+					last_name = email_data.get('last_name', '')
+					if first_name or last_name:
+						full_name = f'{first_name} {last_name}'.strip()
+						employee, _ = save_employee(
+							full_name,
+							designation=email_data.get('position', 'hunter.io'),
+							scan_history=scan_history
+						)
+
+			# Append to emails.txt for use by other tools like h8mail
+			with open(emails_file, 'a') as f:
+				for email in emails_found:
+					f.write(f'{email}\n')
+
+			logger.info(f'hunter.io found {len(emails_found)} emails for {host}')
+		else:
+			logger.warning(f'hunter.io returned no emails for {host}')
+
+		return emails_found
+
+	except Exception as e:
+		logger.error(f'hunter.io API error: {e}')
+		return []
+
+
+@app.task(name='dehashed', queue='osint_discovery_queue', bind=False)
+def dehashed(config, host, scan_history_id, activity_id, results_dir, ctx={}):
+	"""Run dehashed credential lookup.
+
+	Args:
+		config (dict): yaml_configuration
+		host (str): target domain name
+		scan_history_id (startScan.ScanHistory): Scan History ID
+		activity_id: ScanActivity ID
+		results_dir (str): Path to store scan results
+		ctx (dict): context of scan
+
+	Returns:
+		list[dict]: List of leaked credentials.
+	"""
+	logger.info(f'dehashed: Starting credential lookup for {host}')
+	scan_history = ScanHistory.objects.get(pk=scan_history_id)
+	output_file = f'{results_dir}/dehashed.json'
+
+	dehashed_creds = get_dehashed_credentials()
+	if not dehashed_creds:
+		logger.error('Dehashed API credentials not found. Skipping.')
+		return []
+
+	dehashed_email, dehashed_key = dehashed_creds
+
+	try:
+		# Dehashed API - search by domain
+		api_url = f'https://api.dehashed.com/search?query=domain:{host}'
+		headers = {
+			'Accept': 'application/json',
+		}
+		response = requests.get(
+			api_url,
+			headers=headers,
+			auth=(dehashed_email, dehashed_key),
+			timeout=60
+		)
+
+		if response.status_code != 200:
+			logger.error(f'Dehashed API returned status {response.status_code}: {response.text}')
+			return []
+
+		data = response.json()
+
+		# Save raw response
+		with open(output_file, 'w') as f:
+			json.dump(data, f, indent=4)
+
+		entries = data.get('entries', [])
+		if entries:
+			# Process and save leaked credentials
+			emails_file = f'{results_dir}/emails.txt'
+			emails_found = set()
+			
+			for entry in entries:
+				email_address = entry.get('email')
+				if email_address:
+					emails_found.add(email_address)
+					email, _ = save_email(email_address, scan_history=scan_history)
+				
+				# Log credential leak info (without exposing actual passwords)
+				username = entry.get('username', '')
+				database = entry.get('database_name', 'unknown')
+				if email_address or username:
+					logger.warning(f'Dehashed: Found leak in {database} for {email_address or username}')
+
+			# Append unique emails to emails.txt
+			if emails_found:
+				with open(emails_file, 'a') as f:
+					for email in emails_found:
+						f.write(f'{email}\n')
+
+			logger.info(f'Dehashed found {len(entries)} leaked entries for {host}')
+		else:
+			logger.info(f'Dehashed found no leaked credentials for {host}')
+
+		return entries
+
+	except Exception as e:
+		logger.error(f'Dehashed API error: {e}')
+		return []
+
+
+@app.task(name='hibp_breach_check', queue='osint_discovery_queue', bind=False)
+def hibp_breach_check(config, host, scan_history_id, activity_id, results_dir, ctx={}):
+	"""Run Have I Been Pwned breach checking for domain.
+
+	Args:
+		config (dict): yaml_configuration
+		host (str): target domain name
+		scan_history_id (startScan.ScanHistory): Scan History ID
+		activity_id: ScanActivity ID
+		results_dir (str): Path to store scan results
+		ctx (dict): context of scan
+
+	Returns:
+		list[dict]: List of breached accounts info.
+	"""
+	logger.info(f'hibp_breach_check: Starting breach check for {host}')
+	scan_history = ScanHistory.objects.get(pk=scan_history_id)
+	output_file = f'{results_dir}/hibp_breaches.json'
+
+	hibp_key = get_hibp_key()
+	if not hibp_key:
+		logger.error('HIBP API key not found. Skipping.')
+		return []
+
+	try:
+		# HIBP API - search breached accounts by domain
+		api_url = f'https://haveibeenpwned.com/api/v3/breacheddomain/{host}'
+		headers = {
+			'hibp-api-key': hibp_key,
+			'Accept': 'application/json',
+			'User-Agent': 'reNgine-Security-Scanner'
+		}
+		response = requests.get(api_url, headers=headers, timeout=60)
+
+		if response.status_code == 404:
+			logger.info(f'HIBP: No breaches found for domain {host}')
+			return []
+
+		if response.status_code == 401:
+			logger.error('HIBP API key is invalid or unauthorized')
+			return []
+
+		if response.status_code == 429:
+			logger.warning('HIBP API rate limit exceeded')
+			return []
+
+		if response.status_code != 200:
+			logger.error(f'HIBP API returned status {response.status_code}: {response.text}')
+			return []
+
+		data = response.json()
+
+		# Save raw response
+		with open(output_file, 'w') as f:
+			json.dump(data, f, indent=4)
+
+		breached_accounts = []
+		emails_file = f'{results_dir}/emails.txt'
+		emails_found = set()
+
+		# Process the domain breach response (it's a dict of alias -> breach list)
+		for alias, breaches in data.items():
+			email_address = f'{alias}@{host}'
+			emails_found.add(email_address)
+			
+			# Save the email
+			email, _ = save_email(email_address, scan_history=scan_history)
+			
+			for breach_name in breaches:
+				breached_accounts.append({
+					'email': email_address,
+					'breach': breach_name
+				})
+				logger.warning(f'HIBP: {email_address} found in breach: {breach_name}')
+
+		# Append unique emails to emails.txt
+		if emails_found:
+			with open(emails_file, 'a') as f:
+				for email in emails_found:
+					f.write(f'{email}\n')
+
+		logger.info(f'HIBP found {len(data)} breached accounts for {host}')
+		return breached_accounts
+
+	except Exception as e:
+		logger.error(f'HIBP API error: {e}')
+		return []
+
+
+@app.task(name='shodan_enrichment', queue='main_scan_queue', bind=False)
+def shodan_enrichment(scan_history_id, results_dir, ctx={}):
+	"""Enrich discovered IPs with Shodan data.
+
+	Args:
+		scan_history_id (startScan.ScanHistory): Scan History ID
+		results_dir (str): Path to store scan results
+		ctx (dict): context of scan
+
+	Returns:
+		dict: Enrichment results for each IP.
+	"""
+	logger.info(f'shodan_enrichment: Starting IP enrichment for scan {scan_history_id}')
+	scan_history = ScanHistory.objects.get(pk=scan_history_id)
+	output_file = f'{results_dir}/shodan_enrichment.json'
+
+	shodan_key = get_shodan_key()
+	if not shodan_key:
+		logger.error('Shodan API key not found. Skipping enrichment.')
+		return {}
+
+	# Get unique IPs from discovered subdomains
+	subdomains = Subdomain.objects.filter(scan_history=scan_history)
+	unique_ips = set()
+	for subdomain in subdomains:
+		if subdomain.ip_addresses:
+			for ip in subdomain.ip_addresses.all():
+				if ip.address and not ip.address.startswith('10.') and not ip.address.startswith('192.168.') and not ip.address.startswith('172.'):
+					unique_ips.add(ip.address)
+
+	if not unique_ips:
+		logger.warning('No public IPs found to enrich with Shodan')
+		return {}
+
+	logger.info(f'Enriching {len(unique_ips)} unique IPs with Shodan')
+	results = {}
+
+	for ip_address in unique_ips:
+		try:
+			api_url = f'https://api.shodan.io/shodan/host/{ip_address}?key={shodan_key}'
+			response = requests.get(api_url, timeout=30)
+
+			if response.status_code == 200:
+				data = response.json()
+				results[ip_address] = data
+
+				# Extract and save useful information
+				ports = data.get('ports', [])
+				vulns = data.get('vulns', [])
+				hostnames = data.get('hostnames', [])
+				org = data.get('org', '')
+				isp = data.get('isp', '')
+
+				# Update IP address record with Shodan data
+				ip_obj = IpAddress.objects.filter(address=ip_address).first()
+				if ip_obj:
+					# Add discovered ports
+					for port in ports:
+						port_obj, _ = Port.objects.get_or_create(
+							number=port,
+							defaults={'is_uncommon': port not in [80, 443, 22, 21, 25, 53]}
+						)
+						ip_obj.ports.add(port_obj)
+
+					ip_obj.save()
+
+				# Log findings
+				if vulns:
+					logger.warning(f'Shodan: {ip_address} has {len(vulns)} known vulnerabilities: {vulns[:5]}')
+				if ports:
+					logger.info(f'Shodan: {ip_address} has {len(ports)} open ports: {ports[:10]}')
+
+			elif response.status_code == 404:
+				logger.info(f'Shodan: No data found for {ip_address}')
+			else:
+				logger.warning(f'Shodan API returned {response.status_code} for {ip_address}')
+
+			# Rate limiting - Shodan has API limits
+			time.sleep(1)
+
+		except Exception as e:
+			logger.error(f'Shodan enrichment error for {ip_address}: {e}')
+
+	# Save all results to file
+	with open(output_file, 'w') as f:
+		json.dump(results, f, indent=4)
+
+	logger.info(f'Shodan enrichment completed for {len(results)} IPs')
+	return results
+
+
+@app.task(name='urlscan_analysis', queue='main_scan_queue', bind=False)
+def urlscan_analysis(scan_history_id, results_dir, ctx={}):
+	"""Analyze discovered URLs with URLScan.io for technology and security info.
+
+	Args:
+		scan_history_id (startScan.ScanHistory): Scan History ID
+		results_dir (str): Path to store scan results
+		ctx (dict): context of scan
+
+	Returns:
+		dict: Analysis results for each URL.
+	"""
+	logger.info(f'urlscan_analysis: Starting URL analysis for scan {scan_history_id}')
+	scan_history = ScanHistory.objects.get(pk=scan_history_id)
+	output_file = f'{results_dir}/urlscan_analysis.json'
+
+	urlscan_key = get_urlscan_key()
+	if not urlscan_key:
+		logger.error('URLScan.io API key not found. Skipping.')
+		return {}
+
+	# Get unique URLs from discovered subdomains (limit to root URLs)
+	subdomains = Subdomain.objects.filter(scan_history=scan_history, http_status=200)[:20]  # Limit to 20 to avoid rate limits
+	results = {}
+
+	for subdomain in subdomains:
+		url = subdomain.http_url
+		if not url:
+			continue
+		
+		try:
+			# Submit URL for scanning
+			submit_url = 'https://urlscan.io/api/v1/scan/'
+			headers = {'API-Key': urlscan_key, 'Content-Type': 'application/json'}
+			payload = {'url': url, 'visibility': 'private'}
+			
+			response = requests.post(submit_url, headers=headers, json=payload, timeout=30)
+			
+			if response.status_code == 200:
+				data = response.json()
+				result_uuid = data.get('uuid')
+				
+				if result_uuid:
+					# Wait for result and fetch it
+					time.sleep(15)  # URLScan needs time to analyze
+					result_url = f'https://urlscan.io/api/v1/result/{result_uuid}/'
+					result_response = requests.get(result_url, headers=headers, timeout=30)
+					
+					if result_response.status_code == 200:
+						result_data = result_response.json()
+						results[url] = {
+							'technologies': result_data.get('page', {}).get('technologies', []),
+							'server': result_data.get('page', {}).get('server'),
+							'title': result_data.get('page', {}).get('title'),
+							'ip': result_data.get('page', {}).get('ip'),
+							'securityHeaders': result_data.get('verdicts', {}).get('overall', {})
+						}
+						logger.info(f'URLScan: Analyzed {url}')
+			elif response.status_code == 429:
+				logger.warning('URLScan.io rate limit reached')
+				break
+			else:
+				logger.warning(f'URLScan.io returned {response.status_code} for {url}')
+			
+			time.sleep(3)  # Rate limiting
+
+		except Exception as e:
+			logger.error(f'URLScan.io error for {url}: {e}')
+
+	# Save results
+	with open(output_file, 'w') as f:
+		json.dump(results, f, indent=4)
+
+	logger.info(f'URLScan analysis completed for {len(results)} URLs')
+	return results
+
+
+@app.task(name='greynoise_lookup', queue='main_scan_queue', bind=False)
+def greynoise_lookup(scan_history_id, results_dir, ctx={}):
+	"""Lookup IPs in GreyNoise to identify internet noise vs targeted activity.
+
+	Args:
+		scan_history_id (startScan.ScanHistory): Scan History ID
+		results_dir (str): Path to store scan results
+		ctx (dict): context of scan
+
+	Returns:
+		dict: GreyNoise results for each IP.
+	"""
+	logger.info(f'greynoise_lookup: Starting IP intelligence for scan {scan_history_id}')
+	scan_history = ScanHistory.objects.get(pk=scan_history_id)
+	output_file = f'{results_dir}/greynoise_results.json'
+
+	greynoise_key = get_greynoise_key()
+	if not greynoise_key:
+		logger.error('GreyNoise API key not found. Skipping.')
+		return {}
+
+	# Get unique public IPs
+	subdomains = Subdomain.objects.filter(scan_history=scan_history)
+	unique_ips = set()
+	for subdomain in subdomains:
+		if subdomain.ip_addresses:
+			for ip in subdomain.ip_addresses.all():
+				if ip.address and not ip.address.startswith(('10.', '192.168.', '172.')):
+					unique_ips.add(ip.address)
+
+	if not unique_ips:
+		logger.warning('No public IPs found for GreyNoise lookup')
+		return {}
+
+	results = {}
+	headers = {'key': greynoise_key, 'Accept': 'application/json'}
+
+	for ip_address in list(unique_ips)[:100]:  # Limit to 100 IPs
+		try:
+			api_url = f'https://api.greynoise.io/v3/community/{ip_address}'
+			response = requests.get(api_url, headers=headers, timeout=30)
+
+			if response.status_code == 200:
+				data = response.json()
+				results[ip_address] = {
+					'noise': data.get('noise', False),
+					'riot': data.get('riot', False),
+					'classification': data.get('classification'),
+					'name': data.get('name'),
+					'link': data.get('link')
+				}
+				
+				if data.get('noise'):
+					logger.info(f'GreyNoise: {ip_address} is scanning the internet (noise)')
+				if data.get('riot'):
+					logger.info(f'GreyNoise: {ip_address} is a known benign service')
+			
+			time.sleep(0.5)  # Rate limiting
+
+		except Exception as e:
+			logger.error(f'GreyNoise error for {ip_address}: {e}')
+
+	# Save results
+	with open(output_file, 'w') as f:
+		json.dump(results, f, indent=4)
+
+	logger.info(f'GreyNoise lookup completed for {len(results)} IPs')
+	return results
+
+
+@app.task(name='abuseipdb_lookup', queue='main_scan_queue', bind=False)
+def abuseipdb_lookup(scan_history_id, results_dir, ctx={}):
+	"""Lookup IPs in AbuseIPDB for reputation scoring.
+
+	Args:
+		scan_history_id (startScan.ScanHistory): Scan History ID
+		results_dir (str): Path to store scan results
+		ctx (dict): context of scan
+
+	Returns:
+		dict: AbuseIPDB results for each IP.
+	"""
+	logger.info(f'abuseipdb_lookup: Starting IP reputation check for scan {scan_history_id}')
+	scan_history = ScanHistory.objects.get(pk=scan_history_id)
+	output_file = f'{results_dir}/abuseipdb_results.json'
+
+	abuseipdb_key = get_abuseipdb_key()
+	if not abuseipdb_key:
+		logger.error('AbuseIPDB API key not found. Skipping.')
+		return {}
+
+	# Get unique public IPs
+	subdomains = Subdomain.objects.filter(scan_history=scan_history)
+	unique_ips = set()
+	for subdomain in subdomains:
+		if subdomain.ip_addresses:
+			for ip in subdomain.ip_addresses.all():
+				if ip.address and not ip.address.startswith(('10.', '192.168.', '172.')):
+					unique_ips.add(ip.address)
+
+	if not unique_ips:
+		logger.warning('No public IPs found for AbuseIPDB lookup')
+		return {}
+
+	results = {}
+	headers = {'Key': abuseipdb_key, 'Accept': 'application/json'}
+
+	for ip_address in list(unique_ips)[:100]:  # Limit to 100 IPs
+		try:
+			api_url = f'https://api.abuseipdb.com/api/v2/check?ipAddress={ip_address}&maxAgeInDays=90'
+			response = requests.get(api_url, headers=headers, timeout=30)
+
+			if response.status_code == 200:
+				data = response.json().get('data', {})
+				results[ip_address] = {
+					'abuseConfidenceScore': data.get('abuseConfidenceScore', 0),
+					'totalReports': data.get('totalReports', 0),
+					'isPublic': data.get('isPublic', True),
+					'isp': data.get('isp'),
+					'domain': data.get('domain'),
+					'usageType': data.get('usageType'),
+					'countryCode': data.get('countryCode')
+				}
+				
+				score = data.get('abuseConfidenceScore', 0)
+				if score > 50:
+					logger.warning(f'AbuseIPDB: {ip_address} has high abuse score: {score}%')
+			
+			time.sleep(0.5)  # Rate limiting
+
+		except Exception as e:
+			logger.error(f'AbuseIPDB error for {ip_address}: {e}')
+
+	# Save results
+	with open(output_file, 'w') as f:
+		json.dump(results, f, indent=4)
+
+	logger.info(f'AbuseIPDB lookup completed for {len(results)} IPs')
+	return results
+
+
+@app.task(name='alienvault_lookup', queue='main_scan_queue', bind=False)
+def alienvault_lookup(scan_history_id, results_dir, ctx={}):
+	"""Lookup domain/IP in AlienVault OTX for threat intelligence.
+
+	Args:
+		scan_history_id (startScan.ScanHistory): Scan History ID
+		results_dir (str): Path to store scan results
+		ctx (dict): context of scan
+
+	Returns:
+		dict: AlienVault OTX results.
+	"""
+	logger.info(f'alienvault_lookup: Starting threat intel lookup for scan {scan_history_id}')
+	scan_history = ScanHistory.objects.get(pk=scan_history_id)
+	output_file = f'{results_dir}/alienvault_results.json'
+
+	otx_key = get_alienvault_key()
+	if not otx_key:
+		logger.error('AlienVault OTX API key not found. Skipping.')
+		return {}
+
+	domain = scan_history.domain.name
+	results = {'domain': {}, 'ips': {}}
+	headers = {'X-OTX-API-KEY': otx_key, 'Accept': 'application/json'}
+
+	# Lookup domain
+	try:
+		api_url = f'https://otx.alienvault.com/api/v1/indicators/domain/{domain}/general'
+		response = requests.get(api_url, headers=headers, timeout=30)
+
+		if response.status_code == 200:
+			data = response.json()
+			results['domain'] = {
+				'pulseCount': data.get('pulse_info', {}).get('count', 0),
+				'alexa': data.get('alexa'),
+				'whois': data.get('whois'),
+				'validation': data.get('validation', [])
+			}
+			
+			pulse_count = data.get('pulse_info', {}).get('count', 0)
+			if pulse_count > 0:
+				logger.warning(f'AlienVault: {domain} appears in {pulse_count} threat pulses')
+	except Exception as e:
+		logger.error(f'AlienVault domain lookup error: {e}')
+
+	# Lookup top IPs
+	subdomains = Subdomain.objects.filter(scan_history=scan_history)
+	unique_ips = set()
+	for subdomain in subdomains:
+		if subdomain.ip_addresses:
+			for ip in subdomain.ip_addresses.all():
+				if ip.address and not ip.address.startswith(('10.', '192.168.', '172.')):
+					unique_ips.add(ip.address)
+
+	for ip_address in list(unique_ips)[:20]:  # Limit to 20 IPs
+		try:
+			api_url = f'https://otx.alienvault.com/api/v1/indicators/IPv4/{ip_address}/general'
+			response = requests.get(api_url, headers=headers, timeout=30)
+
+			if response.status_code == 200:
+				data = response.json()
+				results['ips'][ip_address] = {
+					'pulseCount': data.get('pulse_info', {}).get('count', 0),
+					'reputation': data.get('reputation'),
+					'asn': data.get('asn')
+				}
+			
+			time.sleep(0.5)
+
+		except Exception as e:
+			logger.error(f'AlienVault IP lookup error for {ip_address}: {e}')
+
+	# Save results
+	with open(output_file, 'w') as f:
+		json.dump(results, f, indent=4)
+
+	logger.info(f'AlienVault OTX lookup completed')
+	return results
 
 
 @app.task(name='screenshot', queue='main_scan_queue', base=RengineTask, bind=True)
@@ -3178,6 +4016,61 @@ def http_crawl(
 		history_file=self.history_file,
 		scan_id=self.scan_id,
 		activity_id=self.activity_id)
+
+	# Shodan IP enrichment (optional)
+	if cfg.get('shodan_enrichment', False):
+		shodan_key = get_shodan_key()
+		if shodan_key:
+			logger.info('Running Shodan IP enrichment...')
+			shodan_enrichment.delay(
+				scan_history_id=self.scan_id,
+				results_dir=self.results_dir,
+				ctx=ctx
+			)
+		else:
+			logger.warning('Shodan enrichment enabled but API key not configured')
+
+	# URLScan.io analysis (optional)
+	if cfg.get('urlscan_analysis', False):
+		urlscan_key = get_urlscan_key()
+		if urlscan_key:
+			logger.info('Running URLScan.io analysis...')
+			urlscan_analysis.delay(
+				scan_history_id=self.scan_id,
+				results_dir=self.results_dir,
+				ctx=ctx
+			)
+		else:
+			logger.warning('URLScan analysis enabled but API key not configured')
+
+	# Threat Intelligence enrichment (optional)
+	if cfg.get('threat_intel', False):
+		# GreyNoise lookup
+		if get_greynoise_key():
+			logger.info('Running GreyNoise IP intelligence...')
+			greynoise_lookup.delay(
+				scan_history_id=self.scan_id,
+				results_dir=self.results_dir,
+				ctx=ctx
+			)
+		
+		# AbuseIPDB lookup
+		if get_abuseipdb_key():
+			logger.info('Running AbuseIPDB IP reputation check...')
+			abuseipdb_lookup.delay(
+				scan_history_id=self.scan_id,
+				results_dir=self.results_dir,
+				ctx=ctx
+			)
+		
+		# AlienVault OTX lookup
+		if get_alienvault_key():
+			logger.info('Running AlienVault OTX threat intel lookup...')
+			alienvault_lookup.delay(
+				scan_history_id=self.scan_id,
+				results_dir=self.results_dir,
+				ctx=ctx
+			)
 
 	return results
 

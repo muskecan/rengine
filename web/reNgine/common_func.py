@@ -1155,6 +1155,84 @@ def get_hackerone_key_username():
 	return (hackerone_key[0].username, hackerone_key[0].key) if hackerone_key else None
 
 
+def get_c99_key():
+	"""Get the c99.nl API key from the database."""
+	c99_key = C99APIKey.objects.first()
+	return c99_key.key if c99_key else None
+
+
+def get_hunter_key():
+	"""Get the hunter.io API key from the database."""
+	hunter_key = HunterIOAPIKey.objects.first()
+	return hunter_key.key if hunter_key else None
+
+
+def get_dehashed_credentials():
+	"""
+		Get the Dehashed API credentials from the database.
+		Returns: a tuple of (email, api_key) or None
+	"""
+	dehashed = DehashedAPIKey.objects.first()
+	return (dehashed.email, dehashed.key) if dehashed else None
+
+
+def get_shodan_key():
+	"""Get the Shodan API key from the database."""
+	shodan_key = ShodanAPIKey.objects.first()
+	return shodan_key.key if shodan_key else None
+
+
+def get_securitytrails_key():
+	"""Get the SecurityTrails API key from the database."""
+	key = SecurityTrailsAPIKey.objects.first()
+	return key.key if key else None
+
+
+def get_virustotal_key():
+	"""Get the VirusTotal API key from the database."""
+	key = VirusTotalAPIKey.objects.first()
+	return key.key if key else None
+
+
+def get_censys_credentials():
+	"""
+	Get the Censys API credentials from the database.
+	Returns: a tuple of (api_id, secret) or None
+	"""
+	cred = CensysAPIKey.objects.first()
+	return (cred.api_id, cred.secret) if cred else None
+
+
+def get_hibp_key():
+	"""Get the Have I Been Pwned API key from the database."""
+	key = HIBPAPIKey.objects.first()
+	return key.key if key else None
+
+
+def get_urlscan_key():
+	"""Get the URLScan.io API key from the database."""
+	key = URLScanAPIKey.objects.first()
+	return key.key if key else None
+
+
+def get_greynoise_key():
+	"""Get the GreyNoise API key from the database."""
+	key = GreyNoiseAPIKey.objects.first()
+	return key.key if key else None
+
+
+def get_abuseipdb_key():
+	"""Get the AbuseIPDB API key from the database."""
+	key = AbuseIPDBAPIKey.objects.first()
+	return key.key if key else None
+
+
+def get_alienvault_key():
+	"""Get the AlienVault OTX API key from the database."""
+	key = AlienVaultOTXAPIKey.objects.first()
+	return key.key if key else None
+
+
 def parse_llm_vulnerability_report(report):
 	report = report.replace('**', '')
 	data = {}

@@ -62,6 +62,104 @@ class HackerOneAPIKey(models.Model):
 		return self.username
 
 
+class C99APIKey(models.Model):
+	id = models.AutoField(primary_key=True)
+	key = models.CharField(max_length=500)
+
+	def __str__(self):
+		return self.key
+
+
+class HunterIOAPIKey(models.Model):
+	id = models.AutoField(primary_key=True)
+	key = models.CharField(max_length=500)
+
+	def __str__(self):
+		return self.key
+
+
+class DehashedAPIKey(models.Model):
+	id = models.AutoField(primary_key=True)
+	email = models.CharField(max_length=500)
+	key = models.CharField(max_length=500)
+
+	def __str__(self):
+		return self.email
+
+
+class ShodanAPIKey(models.Model):
+	id = models.AutoField(primary_key=True)
+	key = models.CharField(max_length=500)
+
+	def __str__(self):
+		return self.key
+
+
+class SecurityTrailsAPIKey(models.Model):
+	id = models.AutoField(primary_key=True)
+	key = models.CharField(max_length=500)
+
+	def __str__(self):
+		return self.key
+
+
+class VirusTotalAPIKey(models.Model):
+	id = models.AutoField(primary_key=True)
+	key = models.CharField(max_length=500)
+
+	def __str__(self):
+		return self.key
+
+
+class CensysAPIKey(models.Model):
+	id = models.AutoField(primary_key=True)
+	api_id = models.CharField(max_length=500)
+	secret = models.CharField(max_length=500)
+
+	def __str__(self):
+		return self.api_id
+
+
+class HIBPAPIKey(models.Model):
+	id = models.AutoField(primary_key=True)
+	key = models.CharField(max_length=500)
+
+	def __str__(self):
+		return self.key
+
+
+class URLScanAPIKey(models.Model):
+	id = models.AutoField(primary_key=True)
+	key = models.CharField(max_length=500)
+
+	def __str__(self):
+		return self.key
+
+
+class GreyNoiseAPIKey(models.Model):
+	id = models.AutoField(primary_key=True)
+	key = models.CharField(max_length=500)
+
+	def __str__(self):
+		return self.key
+
+
+class AbuseIPDBAPIKey(models.Model):
+	id = models.AutoField(primary_key=True)
+	key = models.CharField(max_length=500)
+
+	def __str__(self):
+		return self.key
+
+
+class AlienVaultOTXAPIKey(models.Model):
+	id = models.AutoField(primary_key=True)
+	key = models.CharField(max_length=500)
+
+	def __str__(self):
+		return self.key
+
+
 class InAppNotification(models.Model):
 	project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True)
 	notification_type = models.CharField(max_length=10, choices=NOTIFICATION_TYPES, default='system')

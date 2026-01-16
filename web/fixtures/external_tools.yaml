@@ -491,3 +491,21 @@
     is_github_cloned: false
     github_clone_path: null
     subdomain_gathering_command: null
+- model: scanEngine.installedexternaltool
+  pk: 28
+  fields:
+    logo_url: ''
+    name: c99
+    description: c99.nl provides subdomain enumeration via API, aggregating data
+      from multiple sources for comprehensive subdomain discovery.
+    github_url: https://api.c99.nl/
+    license_url: ''
+    version_lookup_command: ''
+    update_command: ''
+    install_command: ''
+    version_match_regex: ''
+    is_default: true
+    is_subdomain_gathering: true
+    is_github_cloned: false
+    github_clone_path: ''
+    subdomain_gathering_command: ''

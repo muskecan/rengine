@@ -175,6 +175,34 @@
                     <input class="form-control" type="text" id="key_hackerone" name="key_hackerone" placeholder="Enter HackerOne Token" value="{{hackerone_key}}">
                     <small class="text-muted">Used for importing targets, bookmarked programs, and submitting automated vulnerability reports. <a href="https://hackerone.com/settings/api_token/edit" target="_blank">Generate your API Token</a></small>
                   </div>
+                  <hr class="my-3">
+                  <p class="text-muted small">Additional OSINT and Enrichment APIs</p>
+                  <div class="mb-3">
+                    <label for="key_c99" class="form-label">c99.nl Key</label>
+                    <input class="form-control" type="text" id="key_c99" name="key_c99" placeholder="Enter c99.nl API Key" value="{{c99_key}}">
+                    <small class="text-muted">Subdomain enumeration via API. <a href="https://api.c99.nl/" target="_blank">Get your API key</a></small>
+                  </div>
+                  <div class="mb-3">
+                    <label for="key_hunter" class="form-label">Hunter.io Key</label>
+                    <input class="form-control" type="text" id="key_hunter" name="key_hunter" placeholder="Enter Hunter.io API Key" value="{{hunter_key}}">
+                    <small class="text-muted">Professional email discovery for OSINT. <a href="https://hunter.io/api" target="_blank">Get your API key</a></small>
+                  </div>
+                  <div class="row mb-3">
+                    <div class="col-md-6">
+                      <label for="email_dehashed" class="form-label">Dehashed Email</label>
+                      <input class="form-control" type="text" id="email_dehashed" name="email_dehashed" placeholder="Enter Dehashed Email" value="{{dehashed_email}}">
+                    </div>
+                    <div class="col-md-6">
+                      <label for="key_dehashed" class="form-label">Dehashed API Key</label>
+                      <input class="form-control" type="text" id="key_dehashed" name="key_dehashed" placeholder="Enter Dehashed API Key" value="{{dehashed_key}}">
+                    </div>
+                    <small class="text-muted mt-1">Leaked credential database lookup. <a href="https://www.dehashed.com/profile" target="_blank">Get your API key</a></small>
+                  </div>
+                  <div class="mb-3">
+                    <label for="key_shodan" class="form-label">Shodan Key</label>
+                    <input class="form-control" type="text" id="key_shodan" name="key_shodan" placeholder="Enter Shodan API Key" value="{{shodan_key}}">
+                    <small class="text-muted">IP enrichment with ports, services, and vulnerabilities. <a href="https://account.shodan.io/" target="_blank">Get your API key</a></small>
+                  </div>
                 </div>
               </div>
               <div class="text-end">

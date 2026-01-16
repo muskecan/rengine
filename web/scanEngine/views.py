@@ -16,6 +16,12 @@ from reNgine.tasks import (run_command, send_discord_message, send_slack_message
 from scanEngine.forms import *
 from scanEngine.forms import ConfigurationForm
 from scanEngine.models import *
+from dashboard.models import (
+    OpenAiAPIKey, NetlasAPIKey, ChaosAPIKey, HackerOneAPIKey,
+    C99APIKey, HunterIOAPIKey, DehashedAPIKey, ShodanAPIKey,
+    SecurityTrailsAPIKey, VirusTotalAPIKey, CensysAPIKey, HIBPAPIKey,
+    URLScanAPIKey, GreyNoiseAPIKey, AbuseIPDBAPIKey, AlienVaultOTXAPIKey
+)
 
 
 def index(request, slug):
@@ -506,6 +512,21 @@ def api_vault(request, slug):
         key_chaos = request.POST.get('key_chaos')
         key_hackerone = request.POST.get('key_hackerone')
         username_hackerone = request.POST.get('username_hackerone')
+        key_c99 = request.POST.get('key_c99')
+        key_hunter = request.POST.get('key_hunter')
+        key_dehashed = request.POST.get('key_dehashed')
+        email_dehashed = request.POST.get('email_dehashed')
+        key_shodan = request.POST.get('key_shodan')
+        # New API keys
+        key_securitytrails = request.POST.get('key_securitytrails')
+        key_virustotal = request.POST.get('key_virustotal')
+        censys_api_id = request.POST.get('censys_api_id')
+        censys_secret = request.POST.get('censys_secret')
+        key_hibp = request.POST.get('key_hibp')
+        key_urlscan = request.POST.get('key_urlscan')
+        key_greynoise = request.POST.get('key_greynoise')
+        key_abuseipdb = request.POST.get('key_abuseipdb')
+        key_alienvault = request.POST.get('key_alienvault')
 
 
         if key_openai:
@@ -544,6 +565,108 @@ def api_vault(request, slug):
                     key=key_hackerone
                 )
 
+        if key_c99:
+            c99_api_key = C99APIKey.objects.first()
+            if c99_api_key:
+                c99_api_key.key = key_c99
+                c99_api_key.save()
+            else:
+                C99APIKey.objects.create(key=key_c99)
+
+        if key_hunter:
+            hunter_api_key = HunterIOAPIKey.objects.first()
+            if hunter_api_key:
+                hunter_api_key.key = key_hunter
+                hunter_api_key.save()
+            else:
+                HunterIOAPIKey.objects.create(key=key_hunter)
+
+        if key_dehashed and email_dehashed:
+            dehashed_api_key = DehashedAPIKey.objects.first()
+            if dehashed_api_key:
+                dehashed_api_key.email = email_dehashed
+                dehashed_api_key.key = key_dehashed
+                dehashed_api_key.save()
+            else:
+                DehashedAPIKey.objects.create(
+                    email=email_dehashed,
+                    key=key_dehashed
+                )
+
+        if key_shodan:
+            shodan_api_key = ShodanAPIKey.objects.first()
+            if shodan_api_key:
+                shodan_api_key.key = key_shodan
+                shodan_api_key.save()
+            else:
+                ShodanAPIKey.objects.create(key=key_shodan)
+
+        # Handle new API keys
+        if key_securitytrails:
+            api_key = SecurityTrailsAPIKey.objects.first()
+            if api_key:
+                api_key.key = key_securitytrails
+                api_key.save()
+            else:
+                SecurityTrailsAPIKey.objects.create(key=key_securitytrails)
+
+        if key_virustotal:
+            api_key = VirusTotalAPIKey.objects.first()
+            if api_key:
+                api_key.key = key_virustotal
+                api_key.save()
+            else:
+                VirusTotalAPIKey.objects.create(key=key_virustotal)
+
+        if censys_api_id and censys_secret:
+            api_key = CensysAPIKey.objects.first()
+            if api_key:
+                api_key.api_id = censys_api_id
+                api_key.secret = censys_secret
+                api_key.save()
+            else:
+                CensysAPIKey.objects.create(api_id=censys_api_id, secret=censys_secret)
+
+        if key_hibp:
+            api_key = HIBPAPIKey.objects.first()
+            if api_key:
+                api_key.key = key_hibp
+                api_key.save()
+            else:
+                HIBPAPIKey.objects.create(key=key_hibp)
+
+        if key_urlscan:
+            api_key = URLScanAPIKey.objects.first()
+            if api_key:
+                api_key.key = key_urlscan
+                api_key.save()
+            else:
+                URLScanAPIKey.objects.create(key=key_urlscan)
+
+        if key_greynoise:
+            api_key = GreyNoiseAPIKey.objects.first()
+            if api_key:
+                api_key.key = key_greynoise
+                api_key.save()
+            else:
+                GreyNoiseAPIKey.objects.create(key=key_greynoise)
+
+        if key_abuseipdb:
+            api_key = AbuseIPDBAPIKey.objects.first()
+            if api_key:
+                api_key.key = key_abuseipdb
+                api_key.save()
+            else:
+                AbuseIPDBAPIKey.objects.create(key=key_abuseipdb)
+
+        if key_alienvault:
+            api_key = AlienVaultOTXAPIKey.objects.first()
+            if api_key:
+                api_key.key = key_alienvault
+                api_key.save()
+            else:
+                AlienVaultOTXAPIKey.objects.create(key=key_alienvault)
+
     openai_key = OpenAiAPIKey.objects.first()
     netlas_key = NetlasAPIKey.objects.first()
     chaos_key = ChaosAPIKey.objects.first()
@@ -555,11 +678,53 @@ def api_vault(request, slug):
         hackerone_key = None
         hackerone_username = None
 
+    c99_key = C99APIKey.objects.first()
+    hunter_key = HunterIOAPIKey.objects.first()
+    dehashed_obj = DehashedAPIKey.objects.first()
+    if dehashed_obj:
+        dehashed_key = dehashed_obj.key
+        dehashed_email = dehashed_obj.email
+    else:
+        dehashed_key = None
+        dehashed_email = None
+    shodan_key = ShodanAPIKey.objects.first()
+
+    # Get new API keys for context
+    securitytrails_key = SecurityTrailsAPIKey.objects.first()
+    virustotal_key = VirusTotalAPIKey.objects.first()
+    censys_obj = CensysAPIKey.objects.first()
+    if censys_obj:
+        censys_api_id = censys_obj.api_id
+        censys_secret = censys_obj.secret
+    else:
+        censys_api_id = None
+        censys_secret = None
+    hibp_key = HIBPAPIKey.objects.first()
+    urlscan_key = URLScanAPIKey.objects.first()
+    greynoise_key = GreyNoiseAPIKey.objects.first()
+    abuseipdb_key = AbuseIPDBAPIKey.objects.first()
+    alienvault_key = AlienVaultOTXAPIKey.objects.first()
+
     context['openai_key'] = openai_key
     context['netlas_key'] = netlas_key
     context['chaos_key'] = chaos_key
     context['hackerone_key'] = hackerone_key
     context['hackerone_username'] = hackerone_username
+    context['c99_key'] = c99_key
+    context['hunter_key'] = hunter_key
+    context['dehashed_key'] = dehashed_key
+    context['dehashed_email'] = dehashed_email
+    context['shodan_key'] = shodan_key
+    # New API keys context
+    context['securitytrails_key'] = securitytrails_key
+    context['virustotal_key'] = virustotal_key
+    context['censys_api_id'] = censys_api_id
+    context['censys_secret'] = censys_secret
+    context['hibp_key'] = hibp_key
+    context['urlscan_key'] = urlscan_key
+    context['greynoise_key'] = greynoise_key
+    context['abuseipdb_key'] = abuseipdb_key
+    context['alienvault_key'] = alienvault_key
     
     return render(request, 'scanEngine/settings/api.html', context)
 

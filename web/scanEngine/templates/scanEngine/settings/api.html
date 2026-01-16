@@ -98,6 +98,241 @@ API Vault
                 </div>
               </div>
               {% endif %}
+
+              <hr class="my-4">
+              <h5 class="text-primary mb-3"><i class="fe-globe me-2"></i>Subdomain Enumeration</h5>
+
+              <div class="mb-3">
+                <label for="key_c99" class="form-label">c99.nl</label>
+                <p class="text-muted">c99.nl API provides fast and reliable subdomain enumeration using multiple data sources.</p>
+                <div class="flex-grow-1 position-relative">
+                {% if c99_key %}
+                  <input class="form-control" type="password" id="key_c99" name="key_c99" placeholder="Enter c99.nl API Key" value="{{c99_key}}">
+                {% else %}
+                  <input class="form-control" type="text" id="key_c99" name="key_c99" placeholder="Enter c99.nl API Key">
+                {% endif %}
+                  <div class="position-absolute top-50 end-0 translate-middle-y pe-2" style="cursor: pointer;" data-password="false">
+                    <span class="password-eye"></span>
+                  </div>
+                </div>
+                <span class="text-muted float-end optional-text mt-2">Get your API key from <a href="https://api.c99.nl/" target="_blank">https://api.c99.nl/</a></span>
+              </div>
+
+              <div class="mb-3">
+                <label for="key_securitytrails" class="form-label">SecurityTrails</label>
+                <p class="text-muted">SecurityTrails API provides comprehensive subdomain data, DNS history, and associated domains. 50 free queries/month.</p>
+                <div class="flex-grow-1 position-relative">
+                {% if securitytrails_key %}
+                  <input class="form-control" type="password" id="key_securitytrails" name="key_securitytrails" placeholder="Enter SecurityTrails API Key" value="{{securitytrails_key}}">
+                {% else %}
+                  <input class="form-control" type="text" id="key_securitytrails" name="key_securitytrails" placeholder="Enter SecurityTrails API Key">
+                {% endif %}
+                  <div class="position-absolute top-50 end-0 translate-middle-y pe-2" style="cursor: pointer;" data-password="false">
+                    <span class="password-eye"></span>
+                  </div>
+                </div>
+                <span class="text-muted float-end optional-text mt-2">Get your API key from <a href="https://securitytrails.com/corp/api" target="_blank">https://securitytrails.com/corp/api</a></span>
+              </div>
+
+              <div class="mb-3">
+                <label for="key_virustotal" class="form-label">VirusTotal</label>
+                <p class="text-muted">VirusTotal API provides passive DNS data for subdomains, domain/IP reputation, and threat intelligence. 500 free lookups/day.</p>
+                <div class="flex-grow-1 position-relative">
+                {% if virustotal_key %}
+                  <input class="form-control" type="password" id="key_virustotal" name="key_virustotal" placeholder="Enter VirusTotal API Key" value="{{virustotal_key}}">
+                {% else %}
+                  <input class="form-control" type="text" id="key_virustotal" name="key_virustotal" placeholder="Enter VirusTotal API Key">
+                {% endif %}
+                  <div class="position-absolute top-50 end-0 translate-middle-y pe-2" style="cursor: pointer;" data-password="false">
+                    <span class="password-eye"></span>
+                  </div>
+                </div>
+                <span class="text-muted float-end optional-text mt-2">Get your API key from <a href="https://www.virustotal.com/gui/my-apikey" target="_blank">https://www.virustotal.com/gui/my-apikey</a></span>
+              </div>
+
+              <div class="mb-3">
+                <label for="key_censys" class="form-label">Censys</label>
+                <div class="row">
+                <p class="text-muted">Censys API discovers assets via SSL/TLS certificates and provides internet-wide scan data. 250 free queries/month.</p>
+                <div class="col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                  <label for="censys_api_id" class="form-label">API ID</label>
+                  {% if censys_api_id %}
+                    <input class="form-control" type="text" id="censys_api_id" name="censys_api_id" placeholder="Enter Censys API ID" value="{{censys_api_id}}">
+                  {% else %}
+                    <input class="form-control" type="text" id="censys_api_id" name="censys_api_id" placeholder="Enter Censys API ID">
+                  {% endif %}
+                </div>
+                <div class="col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                  <label for="censys_secret" class="form-label">Secret</label>
+                  <div class="flex-grow-1 position-relative">
+                  {% if censys_secret %}
+                    <input class="form-control" type="password" id="censys_secret" name="censys_secret" placeholder="Enter Censys Secret" value="{{censys_secret}}">
+                  {% else %}
+                    <input class="form-control" type="text" id="censys_secret" name="censys_secret" placeholder="Enter Censys Secret">
+                  {% endif %}
+                  <div class="position-absolute top-50 end-0 translate-middle-y pe-2" style="cursor: pointer;" data-password="false">
+                    <span class="password-eye"></span>
+                  </div>
+                  </div>
+                </div>
+                <div class="col-12">
+                  <span class="text-muted float-end optional-text mt-2">Get your credentials from <a href="https://search.censys.io/account/api" target="_blank">https://search.censys.io/account/api</a></span>
+                </div>
+                </div>
+              </div>
+
+              <hr class="my-4">
+              <h5 class="text-primary mb-3"><i class="fe-search me-2"></i>OSINT Services</h5>
+
+              <div class="mb-3">
+                <label for="key_hunter" class="form-label">Hunter.io</label>
+                <p class="text-muted">Hunter.io API discovers professional email addresses associated with a domain. Useful for OSINT and finding organization contacts.</p>
+                <div class="flex-grow-1 position-relative">
+                {% if hunter_key %}
+                  <input class="form-control" type="password" id="key_hunter" name="key_hunter" placeholder="Enter Hunter.io API Key" value="{{hunter_key}}">
+                {% else %}
+                  <input class="form-control" type="text" id="key_hunter" name="key_hunter" placeholder="Enter Hunter.io API Key">
+                {% endif %}
+                  <div class="position-absolute top-50 end-0 translate-middle-y pe-2" style="cursor: pointer;" data-password="false">
+                    <span class="password-eye"></span>
+                  </div>
+                </div>
+                <span class="text-muted float-end optional-text mt-2">Get your API key from <a href="https://hunter.io/api" target="_blank">https://hunter.io/api</a></span>
+              </div>
+
+              <div class="mb-3">
+                <label for="key_dehashed" class="form-label">Dehashed</label>
+                <div class="row">
+                <p class="text-muted">Dehashed API searches leaked credential databases to find compromised accounts. Requires both email and API key for authentication.</p>
+                <div class="col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                  <label for="email_dehashed" class="form-label">Dehashed Account Email</label>
+                  {% if dehashed_email %}
+                    <input class="form-control" type="text" id="email_dehashed" name="email_dehashed" placeholder="Enter Dehashed Email" value="{{dehashed_email}}">
+                  {% else %}
+                    <input class="form-control" type="text" id="email_dehashed" name="email_dehashed" placeholder="Enter Dehashed Email">
+                  {% endif %}
+                </div>
+                <div class="col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12">
+                  <label for="key_dehashed" class="form-label">API Key</label>
+                  <div class="flex-grow-1 position-relative">
+                  {% if dehashed_key %}
+                    <input class="form-control" type="password" id="key_dehashed" name="key_dehashed" placeholder="Enter Dehashed API Key" value="{{dehashed_key}}">
+                  {% else %}
+                    <input class="form-control" type="text" id="key_dehashed" name="key_dehashed" placeholder="Enter Dehashed API Key">
+                  {% endif %}
+                  <div class="position-absolute top-50 end-0 translate-middle-y pe-2" style="cursor: pointer;" data-password="false">
+                    <span class="password-eye"></span>
+                  </div>
+                  </div>
+                </div>
+                <div class="col-12">
+                  <span class="text-muted float-end optional-text mt-2">Get your API key from <a href="https://www.dehashed.com/profile" target="_blank">https://www.dehashed.com/profile</a></span>
+                </div>
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <label for="key_hibp" class="form-label">Have I Been Pwned (HIBP)</label>
+                <p class="text-muted">HIBP API checks if domain email addresses appear in data breaches. Domain searches are free with rate limits.</p>
+                <div class="flex-grow-1 position-relative">
+                {% if hibp_key %}
+                  <input class="form-control" type="password" id="key_hibp" name="key_hibp" placeholder="Enter HIBP API Key" value="{{hibp_key}}">
+                {% else %}
+                  <input class="form-control" type="text" id="key_hibp" name="key_hibp" placeholder="Enter HIBP API Key">
+                {% endif %}
+                  <div class="position-absolute top-50 end-0 translate-middle-y pe-2" style="cursor: pointer;" data-password="false">
+                    <span class="password-eye"></span>
+                  </div>
+                </div>
+                <span class="text-muted float-end optional-text mt-2">Get your API key from <a href="https://haveibeenpwned.com/API/Key" target="_blank">https://haveibeenpwned.com/API/Key</a></span>
+              </div>
+
+              <hr class="my-4">
+              <h5 class="text-primary mb-3"><i class="fe-server me-2"></i>Enrichment Services</h5>
+
+              <div class="mb-3">
+                <label for="key_shodan" class="form-label">Shodan</label>
+                <p class="text-muted">Shodan API enriches discovered IPs with open ports, services, banners, and known vulnerabilities without active scanning.</p>
+                <div class="flex-grow-1 position-relative">
+                {% if shodan_key %}
+                  <input class="form-control" type="password" id="key_shodan" name="key_shodan" placeholder="Enter Shodan API Key" value="{{shodan_key}}">
+                {% else %}
+                  <input class="form-control" type="text" id="key_shodan" name="key_shodan" placeholder="Enter Shodan API Key">
+                {% endif %}
+                  <div class="position-absolute top-50 end-0 translate-middle-y pe-2" style="cursor: pointer;" data-password="false">
+                    <span class="password-eye"></span>
+                  </div>
+                </div>
+                <span class="text-muted float-end optional-text mt-2">Get your API key from <a href="https://account.shodan.io/" target="_blank">https://account.shodan.io/</a></span>
+              </div>
+
+              <div class="mb-3">
+                <label for="key_urlscan" class="form-label">URLScan.io</label>
+                <p class="text-muted">URLScan.io API analyzes websites, providing screenshots, technology detection, and outbound links. 5,000 free results/day.</p>
+                <div class="flex-grow-1 position-relative">
+                {% if urlscan_key %}
+                  <input class="form-control" type="password" id="key_urlscan" name="key_urlscan" placeholder="Enter URLScan.io API Key" value="{{urlscan_key}}">
+                {% else %}
+                  <input class="form-control" type="text" id="key_urlscan" name="key_urlscan" placeholder="Enter URLScan.io API Key">
+                {% endif %}
+                  <div class="position-absolute top-50 end-0 translate-middle-y pe-2" style="cursor: pointer;" data-password="false">
+                    <span class="password-eye"></span>
+                  </div>
+                </div>
+                <span class="text-muted float-end optional-text mt-2">Get your API key from <a href="https://urlscan.io/user/profile/" target="_blank">https://urlscan.io/user/profile/</a></span>
+              </div>
+
+              <hr class="my-4">
+              <h5 class="text-primary mb-3"><i class="fe-shield me-2"></i>Threat Intelligence</h5>
+
+              <div class="mb-3">
+                <label for="key_greynoise" class="form-label">GreyNoise</label>
+                <p class="text-muted">GreyNoise API identifies internet background noise vs targeted attacks. Helps filter false positives. 1,000 free queries/day.</p>
+                <div class="flex-grow-1 position-relative">
+                {% if greynoise_key %}
+                  <input class="form-control" type="password" id="key_greynoise" name="key_greynoise" placeholder="Enter GreyNoise API Key" value="{{greynoise_key}}">
+                {% else %}
+                  <input class="form-control" type="text" id="key_greynoise" name="key_greynoise" placeholder="Enter GreyNoise API Key">
+                {% endif %}
+                  <div class="position-absolute top-50 end-0 translate-middle-y pe-2" style="cursor: pointer;" data-password="false">
+                    <span class="password-eye"></span>
+                  </div>
+                </div>
+                <span class="text-muted float-end optional-text mt-2">Get your API key from <a href="https://viz.greynoise.io/account/api-key" target="_blank">https://viz.greynoise.io/account/api-key</a></span>
+              </div>
+
+              <div class="mb-3">
+                <label for="key_abuseipdb" class="form-label">AbuseIPDB</label>
+                <p class="text-muted">AbuseIPDB API provides crowd-sourced IP reputation scoring and abuse reports. 1,000 free checks/day.</p>
+                <div class="flex-grow-1 position-relative">
+                {% if abuseipdb_key %}
+                  <input class="form-control" type="password" id="key_abuseipdb" name="key_abuseipdb" placeholder="Enter AbuseIPDB API Key" value="{{abuseipdb_key}}">
+                {% else %}
+                  <input class="form-control" type="text" id="key_abuseipdb" name="key_abuseipdb" placeholder="Enter AbuseIPDB API Key">
+                {% endif %}
+                  <div class="position-absolute top-50 end-0 translate-middle-y pe-2" style="cursor: pointer;" data-password="false">
+                    <span class="password-eye"></span>
+                  </div>
+                </div>
+                <span class="text-muted float-end optional-text mt-2">Get your API key from <a href="https://www.abuseipdb.com/account/api" target="_blank">https://www.abuseipdb.com/account/api</a></span>
+              </div>
+
+              <div class="mb-3">
+                <label for="key_alienvault" class="form-label">AlienVault OTX</label>
+                <p class="text-muted">AlienVault OTX API provides open threat exchange intelligence including IOCs, pulses, and malware info. Completely free.</p>
+                <div class="flex-grow-1 position-relative">
+                {% if alienvault_key %}
+                  <input class="form-control" type="password" id="key_alienvault" name="key_alienvault" placeholder="Enter AlienVault OTX API Key" value="{{alienvault_key}}">
+                {% else %}
+                  <input class="form-control" type="text" id="key_alienvault" name="key_alienvault" placeholder="Enter AlienVault OTX API Key">
+                {% endif %}
+                  <div class="position-absolute top-50 end-0 translate-middle-y pe-2" style="cursor: pointer;" data-password="false">
+                    <span class="password-eye"></span>
+                  </div>
+                </div>
+                <span class="text-muted float-end optional-text mt-2">Get your API key from <a href="https://otx.alienvault.com/api" target="_blank">https://otx.alienvault.com/api</a></span>
+              </div>
+
               </div>
               <div class="mb-0">
                 <button class="btn btn-primary float-sm-end my-4" type="submit"> Update API Keys</button>
